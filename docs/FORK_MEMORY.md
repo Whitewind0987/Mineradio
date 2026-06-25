@@ -350,18 +350,28 @@ npm start
 
 ---
 
-### 2026-06-25：Stage 4.1 桌面歌词布局
+### 2026-06-25：Stage 4.1 桌面歌词布局与窗口稳定化
 
 **分支**：`feature/desktop-lyrics-layout`
 
-**功能**：单行/双行布局、下一行过滤、左/中/右对齐、持久化偏好。复用现有架构——无 IPC 更改。
+**功能**：单行/静态双行布局、下一行过滤、左/中/右对齐、桌面歌词位置持久化、拖拽最终位置同步、锁定穿透稳定化、主窗口移动期间桌面歌词组合抑制。
 
-**偏好**：`desktopLyricsLineMode`（`single`/`double`）和 `desktopLyricsAlignment`（`left`/`center`/`right`），存储在 `mineradio-lyric-layout-v1` 中。
+**偏好**：`desktopLyricsLineMode`（`single`/`double`）、`desktopLyricsAlignment`（`left`/`center`/`right`）、`desktopLyricsX`、`desktopLyricsY` 和 `desktopLyricsDisplayId` 存储在现有 `mineradio-lyric-layout-v1` 中。未新增独立桌面歌词存储。
 
 **下一行过滤**：`findNextDesktopLyricLine`——跳过空白行和立即重复行。无第二解析器。过滤后的行用于进度跨度。
 
+**位置行为**：桌面歌词窗口恢复保存的水平、垂直比例和显示器身份。窗口允许部分位于显示器外，但至少保留可恢复的可见区域。普通歌词/播放状态更新不再拥有或重置窗口几何；设置中的 Y 滑块是唯一的设置驱动重定位意图。
+
+**拖拽行为**：解锁后复用现有 overlay preload bridge 拖动窗口。拖拽开始/结束通过 `setLyricsDrag(true/false)` 通知主进程；移动中节流写回，拖拽结束时 flush 最终位置并通知主窗口保存。
+
+**主窗口移动缓解**：Windows 原生 `WM_ENTERSIZEMOVE` / `WM_EXITSIZEMOVE` hook 在主窗口手动移动/调整大小期间临时将桌面歌词 opacity 设为 0 并开启 background throttling，结束后恢复原值。未使用 hide/show 恢复，因为该方式破坏过桌面歌词交互。未修改 mouse-ignore 状态。
+
+**双行滚动结论**：曾尝试垂直双行 rolling、snapshot、clone、shell、FLIP 和 viewport animation 等实验，视觉不稳定，已完全移除并延期。当前接受行为是静态当前歌词 + 下一句歌词，无纵向 rolling 动画。
+
 **UI bug**：修复了分段控件双重选择问题——互斥的 `classList.toggle`。
 
-**White 已验证**：双行/右对齐在重启后恢复。按钮选择互斥。叠加层匹配。
+**White 已验证**：桌面歌词完整重启后恢复保存位置；解锁后可拖动；锁定后鼠标穿透正确；再次解锁恢复拖动；单行和静态双行正常；左/中/右对齐正常；长歌词继续横向滚动；主窗口移动抑制可接受；失败的垂直 rolling 实验已完全移除，无 snapshot、clone、shell、FLIP 或纵向 viewport animation 残留。
 
-**不应回退的边界**：不得添加第二解析器。不得全局去重歌词。不得在布局工作中更改穿透。
+**已知限制**：主窗口移动时偶尔可能仍有轻微初始/拖动闪烁；该限制已被 White 接受。不得声称该闪烁已完全消除。
+
+**不应回退的边界**：不得添加第二解析器。不得全局去重歌词。不得让普通播放/歌词更新重置桌面歌词位置。不得移除拖拽结束最终位置 flush。不得恢复 hide/show 作为主窗口移动缓解。不得恢复垂直 rolling、snapshot、clone、shell、FLIP 或纵向 viewport animation。不得在此分支添加工具栏或性能优化。

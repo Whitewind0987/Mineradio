@@ -35,6 +35,12 @@ contextBridge.exposeInMainWorld('desktopWindow', {
     ipcRenderer.on('mineradio-desktop-lyrics-lock-state', listener);
     return () => ipcRenderer.removeListener('mineradio-desktop-lyrics-lock-state', listener);
   },
+  onDesktopLyricsPositionChanged: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload || {});
+    ipcRenderer.on('mineradio-desktop-lyrics-position-changed', listener);
+    return () => ipcRenderer.removeListener('mineradio-desktop-lyrics-position-changed', listener);
+  },
   onDesktopLyricsEnabledState: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload || {});

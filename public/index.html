@@ -3275,6 +3275,8 @@ var fxDefaults = {
   desktopLyricsClickThrough: false,
   desktopLyricsLineMode: 'single',
   desktopLyricsAlignment: 'center',
+  desktopLyricsX: 0.5,
+  desktopLyricsDisplayId: '',
   desktopLyricsCinema: true,
   desktopLyricsHighlight: false,
   desktopLyricsFps: 60,
@@ -3366,6 +3368,8 @@ var PACKAGED_DEFAULT_FX_SNAPSHOT = Object.freeze({
   desktopLyricsClickThrough: false,
   desktopLyricsLineMode: 'single',
   desktopLyricsAlignment: 'center',
+  desktopLyricsX: 0.5,
+  desktopLyricsDisplayId: '',
   desktopLyricsCinema: true,
   desktopLyricsHighlight: false,
   desktopLyricsFps: 60,
@@ -7657,6 +7661,8 @@ function readSavedLyricLayout() {
       desktopLyricsClickThrough: desktopLyricsSchemaReady ? raw.desktopLyricsClickThrough === true : fxDefaults.desktopLyricsClickThrough,
       desktopLyricsLineMode: raw.desktopLyricsLineMode === 'double' ? 'double' : 'single',
       desktopLyricsAlignment: raw.desktopLyricsAlignment === 'left' || raw.desktopLyricsAlignment === 'right' ? raw.desktopLyricsAlignment : 'center',
+      desktopLyricsX: isFinite(Number(raw.desktopLyricsX)) ? clampRange(Number(raw.desktopLyricsX), -0.5, 1.5) : fxDefaults.desktopLyricsX,
+      desktopLyricsDisplayId: typeof raw.desktopLyricsDisplayId === 'string' ? raw.desktopLyricsDisplayId : '',
       desktopLyricsCinema: desktopLyricsSchemaReady ? raw.desktopLyricsCinema !== false : fxDefaults.desktopLyricsCinema,
       desktopLyricsHighlight: desktopLyricsSchemaReady ? raw.desktopLyricsHighlight === true : fxDefaults.desktopLyricsHighlight,
       desktopLyricsFps: desktopLyricsSchemaReady ? normalizeDesktopLyricsFps(raw.desktopLyricsFps) : fxDefaults.desktopLyricsFps,
@@ -7749,6 +7755,8 @@ function saveLyricLayout() {
       desktopLyricsClickThrough: fx.desktopLyricsClickThrough === true,
       desktopLyricsLineMode: fx.desktopLyricsLineMode || 'single',
       desktopLyricsAlignment: fx.desktopLyricsAlignment || 'center',
+      desktopLyricsX: clampRange(Number(fx.desktopLyricsX) || 0.5, -0.5, 1.5),
+      desktopLyricsDisplayId: String(fx.desktopLyricsDisplayId || ''),
       desktopLyricsCinema: fx.desktopLyricsCinema !== false,
       desktopLyricsHighlight: fx.desktopLyricsHighlight === true,
       desktopLyricsFps: normalizeDesktopLyricsFps(fx.desktopLyricsFps),
@@ -7798,11 +7806,33 @@ function setDesktopLyricsAlignment(value) {
   var btns = document.querySelectorAll('#desktop-lyrics-align-seg [data-dl-alignment]');
   for (var i = 0; i < btns.length; i++) { btns[i].classList.toggle('active', btns[i].getAttribute('data-dl-alignment') === fx.desktopLyricsAlignment); }
 }
+var desktopLyricsPositionListenerBound = false;
+function bindDesktopLyricsPositionListener() {
+  if (desktopLyricsPositionListenerBound) return;
+  desktopLyricsPositionListenerBound = true;
+  var api = getDesktopWindowApi();
+  if (!api || typeof api.onDesktopLyricsPositionChanged !== 'function') return;
+  api.onDesktopLyricsPositionChanged(function (pos) {
+    if (!pos || typeof pos !== 'object') return;
+    if (isFinite(pos.x)) fx.desktopLyricsX = clampRange(Number(pos.x), -0.5, 1.5);
+    if (isFinite(pos.y)) fx.desktopLyricsY = clampRange(Number(pos.y), 0.08, 0.92);
+    if (typeof pos.displayId === 'string') fx.desktopLyricsDisplayId = pos.displayId;
+    saveLyricLayout();
+    updateDesktopLyricsYSliderUI();
+  });
+}
+
 function applyDesktopLyricsLineModeUI() {
   var mBtns = document.querySelectorAll('#desktop-lyrics-line-mode-seg [data-dl-line-mode]');
   for (var i = 0; i < mBtns.length; i++) { mBtns[i].classList.toggle('active', mBtns[i].getAttribute('data-dl-line-mode') === (fx.desktopLyricsLineMode || 'single')); }
   var aBtns = document.querySelectorAll('#desktop-lyrics-align-seg [data-dl-alignment]');
   for (var j = 0; j < aBtns.length; j++) { aBtns[j].classList.toggle('active', aBtns[j].getAttribute('data-dl-alignment') === (fx.desktopLyricsAlignment || 'center')); }
+}
+function updateDesktopLyricsYSliderUI() {
+  var slider = document.getElementById('fx-desktoplyricsy');
+  if (slider) slider.value = fx.desktopLyricsY;
+  var output = slider && slider.nextElementSibling;
+  if (output) output.textContent = Math.round(fx.desktopLyricsY * 100) + '%';
 }
 function normalizeDesktopLyricsFps(value) {
   var n = Number(value);
@@ -26968,6 +26998,8 @@ function desktopLyricsPayload(forceBeatMap) {
     size: clampRange(Number(fx.desktopLyricsSize) || fxDefaults.desktopLyricsSize, 0.72, 1.55),
     opacity: clampRange(fx.desktopLyricsOpacity == null ? fxDefaults.desktopLyricsOpacity : Number(fx.desktopLyricsOpacity), 0.28, 1),
     y: clampRange(fx.desktopLyricsY == null ? fxDefaults.desktopLyricsY : Number(fx.desktopLyricsY), 0.08, 0.92),
+    x: clampRange(Number(fx.desktopLyricsX) || 0.5, -0.5, 1.5),
+    displayId: String(fx.desktopLyricsDisplayId || ''),
     clickThrough: isDevelopmentLockedFx('desktopLyricsClickThrough') ? true : fx.desktopLyricsClickThrough !== false,
     lyricGlowParticles: !!fx.lyricGlowParticles,
     cinema: fx.desktopLyricsCinema !== false,
@@ -27250,6 +27282,7 @@ refreshStartupLaunchState();
 restorePlaybackSession();
 applyDesktopLyricsState(true);
 applyDesktopLyricsLineModeUI();
+bindDesktopLyricsPositionListener();
 setTimeout(initUpdatePreview, 9000);
 
 // ============================================================

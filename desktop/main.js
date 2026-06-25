@@ -924,33 +924,49 @@ function clampNumber(value, min, max, fallback) {
 }
 
 function desktopLyricsDefaultBounds(payload = desktopLyricsState) {
-  const display = desktopLyricsUserBounds
-    ? screen.getDisplayMatching(desktopLyricsUserBounds)
-    : screen.getPrimaryDisplay();
+  const display = resolveDesktopLyricsDisplay(payload);
   const bounds = display.bounds;
+  const xRatio = clampNumber(payload.x, -0.5, 1.5, 0.5);
   const yRatio = clampNumber(payload.y, 0.08, 0.92, 0.76);
   const width = Math.round(Math.min(Math.max(880, bounds.width * 0.72), bounds.width - 96));
   const height = Math.round(Math.min(Math.max(340, bounds.height * 0.38), 560, bounds.height - 96));
   return {
-    x: Math.round(bounds.x + (bounds.width - width) / 2),
+    x: Math.round(bounds.x + bounds.width * xRatio - width / 2),
     y: Math.round(bounds.y + bounds.height * yRatio - height / 2),
     width,
     height,
   };
 }
 
+function resolveDesktopLyricsDisplay(payload) {
+  if (desktopLyricsUserBounds) return screen.getDisplayMatching(desktopLyricsUserBounds);
+  const savedId = payload && String(payload.displayId || '').trim();
+  if (savedId) {
+    const displays = screen.getAllDisplays();
+    for (var i = 0; i < displays.length; i++) {
+      if (String(displays[i].id) === savedId) return displays[i];
+    }
+  }
+  return screen.getPrimaryDisplay();
+}
+
 function constrainDesktopLyricsBounds(bounds) {
   const display = screen.getDisplayMatching(bounds);
   const area = display.bounds;
+  const MIN_VISIBLE_X = 64;
+  const MIN_VISIBLE_Y = 48;
   const next = {
     ...bounds,
     width: Math.round(Math.min(Math.max(320, bounds.width), area.width)),
     height: Math.round(Math.min(Math.max(180, bounds.height), area.height)),
   };
-  const maxX = area.x + Math.max(0, area.width - next.width);
-  const maxY = area.y + Math.max(0, area.height - next.height);
-  next.x = Math.round(clampNumber(next.x, area.x, maxX, area.x));
-  next.y = Math.round(clampNumber(next.y, area.y, maxY, area.y));
+  // Allow partial off-screen — keep at least a recovery strip visible
+  const minX = area.x - next.width + MIN_VISIBLE_X;
+  const maxX = area.x + area.width - MIN_VISIBLE_X;
+  const minY = area.y - next.height + MIN_VISIBLE_Y;
+  const maxY = area.y + area.height - MIN_VISIBLE_Y;
+  next.x = Math.round(clampNumber(next.x, minX, maxX, area.x));
+  next.y = Math.round(clampNumber(next.y, minY, maxY, area.y));
   return next;
 }
 
@@ -976,6 +992,44 @@ function setDesktopLyricsBounds(bounds) {
 function rememberDesktopLyricsBounds() {
   if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed() || desktopLyricsProgrammaticMove) return;
   desktopLyricsUserBounds = desktopLyricsWindow.getBounds();
+  notifyDesktopLyricsPositionChanged();
+}
+
+var desktopLyricsPositionNotifyTimer = null;
+var desktopLyricsHiddenForMainMove = false;
+var desktopLyricsRestoreAfterMoveTimer = null;
+function scheduleDesktopLyricsPositionNotification() {
+  if (desktopLyricsPositionNotifyTimer) return;
+  desktopLyricsPositionNotifyTimer = setTimeout(function () {
+    desktopLyricsPositionNotifyTimer = null;
+    sendDesktopLyricsPositionNow();
+  }, 320);
+}
+
+function flushDesktopLyricsPositionNotification() {
+  if (desktopLyricsPositionNotifyTimer) {
+    clearTimeout(desktopLyricsPositionNotifyTimer);
+    desktopLyricsPositionNotifyTimer = null;
+  }
+  sendDesktopLyricsPositionNow();
+}
+
+function sendDesktopLyricsPositionNow() {
+  if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  var userBounds = desktopLyricsUserBounds || desktopLyricsWindow.getBounds();
+  var display = screen.getDisplayMatching(userBounds);
+  var xRatio = display.bounds.width > 0 ? clampNumber((userBounds.x + userBounds.width / 2 - display.bounds.x) / display.bounds.width, -0.5, 1.5, 0.5) : 0.5;
+  var yRatio = display.bounds.height > 0 ? clampNumber((userBounds.y + userBounds.height / 2 - display.bounds.y) / display.bounds.height, -0.5, 1.5, 0.76) : 0.76;
+  mainWindow.webContents.send('mineradio-desktop-lyrics-position-changed', {
+    x: xRatio,
+    y: yRatio,
+    displayId: String(display.id || ''),
+  });
+}
+
+function notifyDesktopLyricsPositionChanged() {
+  scheduleDesktopLyricsPositionNotification();
 }
 
 function applyDesktopLyricsMouseBehavior() {
@@ -1110,18 +1164,15 @@ function sendDesktopLyricsState() {
 }
 
 function createDesktopLyricsWindow(payload = {}) {
-  const previousY = desktopLyricsState.y;
   const previousOpacity = desktopLyricsState.opacity;
   desktopLyricsState = { ...desktopLyricsState, ...payload, enabled: true };
-  const hasY = Object.prototype.hasOwnProperty.call(payload || {}, 'y');
-  const nextY = clampNumber(desktopLyricsState.y, 0.08, 0.92, 0.76);
-  const yChanged = hasY && Number.isFinite(Number(previousY)) && Math.abs(nextY - clampNumber(previousY, 0.08, 0.92, 0.76)) > 0.001;
+  const positionIntent = payload && payload.positionIntent;
   const opacityChanged = Object.prototype.hasOwnProperty.call(payload || {}, 'opacity')
     && Math.abs(clampNumber(desktopLyricsState.opacity, 0.28, 1, 0.92) - clampNumber(previousOpacity, 0.28, 1, 0.92)) > 0.001;
-  if (yChanged) desktopLyricsUserBounds = null;
+  if (positionIntent === 'slider') desktopLyricsUserBounds = null;
   if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
-    if (yChanged) {
-      positionDesktopLyricsWindow(desktopLyricsState, { force: yChanged });
+    if (positionIntent === 'slider') {
+      positionDesktopLyricsWindow(desktopLyricsState, { force: true });
     } else if (opacityChanged && typeof desktopLyricsWindow.setOpacity === 'function') {
       desktopLyricsWindow.setOpacity(clampNumber(desktopLyricsState.opacity, 0.28, 1, 0.92));
     }
@@ -1159,7 +1210,7 @@ function createDesktopLyricsWindow(payload = {}) {
   }
   startDesktopLyricsMousePoller();
   applyDesktopLyricsMouseBehavior();
-  positionDesktopLyricsWindow(desktopLyricsState, { force: yChanged || !desktopLyricsUserBounds });
+  positionDesktopLyricsWindow(desktopLyricsState, { force: true });
   desktopLyricsWindow.once('ready-to-show', () => {
     if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
     desktopLyricsWindow.showInactive();
@@ -1475,6 +1526,7 @@ ipcMain.handle('mineradio-desktop-lyrics-update', async (_event, payload) => {
 });
 
 ipcMain.handle('mineradio-desktop-lyrics-set-dragging', async () => {
+  flushDesktopLyricsPositionNotification();
   return { ok: true };
 });
 
@@ -1525,6 +1577,7 @@ ipcMain.handle('mineradio-desktop-lyrics-move-by', async (_event, dx, dy) => {
     };
     desktopLyricsWindow.setBounds(next, false);
     desktopLyricsUserBounds = desktopLyricsWindow.getBounds();
+    scheduleDesktopLyricsPositionNotification();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message || 'DESKTOP_LYRICS_MOVE_FAILED' };
@@ -1644,6 +1697,44 @@ async function createWindow() {
   mainWindow.on('move', () => scheduleWindowStateSend(mainWindow));
   mainWindow.on('resize', () => scheduleWindowStateSend(mainWindow));
 
+  // Suppress rendering & composition during main-window manual move/resize
+  // Uses native Windows messages to begin suppression before visible movement.
+  const WM_ENTERSIZEMOVE = 0x0231;
+  const WM_EXITSIZEMOVE = 0x0232;
+  var desktopLyricsOpacityBeforeMove = 0;
+  var desktopLyricsBackgroundThrottlingBeforeMove = false;
+
+  function beginMainWindowMoveSuppression() {
+    if (desktopLyricsHiddenForMainMove) return;
+    if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
+    if (!desktopLyricsWindow.isVisible() || !desktopLyricsState.enabled) return;
+    desktopLyricsHiddenForMainMove = true;
+    try {
+      desktopLyricsOpacityBeforeMove = desktopLyricsWindow.getOpacity();
+      desktopLyricsBackgroundThrottlingBeforeMove = desktopLyricsWindow.webContents.getBackgroundThrottling();
+      desktopLyricsWindow.setOpacity(0);
+      desktopLyricsWindow.webContents.setBackgroundThrottling(true);
+    } catch (e) {}
+  }
+
+  function endMainWindowMoveSuppression() {
+    if (desktopLyricsRestoreAfterMoveTimer) clearTimeout(desktopLyricsRestoreAfterMoveTimer);
+    desktopLyricsRestoreAfterMoveTimer = setTimeout(() => {
+      desktopLyricsRestoreAfterMoveTimer = null;
+      if (!desktopLyricsHiddenForMainMove) return;
+      desktopLyricsHiddenForMainMove = false;
+      if (isAppQuitting || !desktopLyricsState.enabled) return;
+      if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
+      try {
+        desktopLyricsWindow.setOpacity(desktopLyricsOpacityBeforeMove);
+        desktopLyricsWindow.webContents.setBackgroundThrottling(desktopLyricsBackgroundThrottlingBeforeMove);
+      } catch (e) {}
+    }, 60);
+  }
+
+  mainWindow.hookWindowMessage(WM_ENTERSIZEMOVE, () => { beginMainWindowMoveSuppression(); });
+  mainWindow.hookWindowMessage(WM_EXITSIZEMOVE, () => { endMainWindowMoveSuppression(); });
+
   mainWindow.on('query-session-end', () => {
     isAppQuitting = true;
     closePromptPending = false;
@@ -1692,6 +1783,10 @@ async function createWindow() {
 
   mainWindow.on('closed', () => {
     closePromptPending = false;
+    if (desktopLyricsRestoreAfterMoveTimer) { clearTimeout(desktopLyricsRestoreAfterMoveTimer); desktopLyricsRestoreAfterMoveTimer = null; }
+    desktopLyricsHiddenForMainMove = false;
+    try { mainWindow.unhookWindowMessage(WM_ENTERSIZEMOVE); } catch (e) {}
+    try { mainWindow.unhookWindowMessage(WM_EXITSIZEMOVE); } catch (e) {}
     if (mainWindowStateTimer) {
       clearTimeout(mainWindowStateTimer);
       mainWindowStateTimer = null;
@@ -1755,6 +1850,8 @@ if (!gotSingleInstanceLock) {
   app.on('before-quit', () => {
     isAppQuitting = true;
     closePromptPending = false;
+    if (desktopLyricsRestoreAfterMoveTimer) { clearTimeout(desktopLyricsRestoreAfterMoveTimer); desktopLyricsRestoreAfterMoveTimer = null; }
+    desktopLyricsHiddenForMainMove = false;
     destroyTray();
     unregisterMineradioGlobalHotkeys();
     closeOverlayWindows();
