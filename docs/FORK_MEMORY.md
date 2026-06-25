@@ -133,3 +133,51 @@ npm start
 - 在 fork 拥有有效的自有发布源之前不得重新启用更新
 - 不得自动迁移上游账户数据
 - 不得将 `preview` 恢复为更新可用性条件
+
+---
+
+## 功能验证记录
+
+### 2026-06-25：Stage 1 Windows 系统媒体控制
+
+**分支**：`feature/windows-media-session`
+
+**架构**：
+- 仅渲染器实现；仅 `public/index.html` 包含集成代码
+- 使用 Chromium `navigator.mediaSession`，无主进程变更
+- 无 preload 或 IPC 变更；无依赖变更
+- 保留 `contextIsolation: true` + `nodeIntegration: false`
+
+**复用的播放行为**：
+- 权威音频对象保持为 `audio`；权威队列 `playQueue`；权威索引 `currentIdx`；权威播放标志 `playing`
+- play 复用 `playQueueAt()` / `attemptAudioPlay()`；pause 复用 `fadeOutAndPauseAudio()`
+- previous 复用 `prevTrack()`；next 复用 `nextTrack()`
+
+**已注册的操作处理程序**：`play`、`pause`、`previoustrack`、`nexttrack`
+- 无 `stop`、`seekto`、`seekbackward`、`seekforward`；无 `setPositionState()`
+- 无 Electron `MediaPlayPause`/`MediaNextTrack`/`MediaPreviousTrack` 全局快捷键
+
+**竞态保护**：元数据更新直接与 `trackSwitchToken` 比较；过时异步曲目变更无法覆盖最新元数据；过时失败无法清除新曲目
+
+**已由用户手动验证的行为**：
+- Windows 10 媒体卡片在播放时出现；歌曲标题、歌手、相册和封面正确显示
+- 系统播放/暂停/上一首/下一首工作正常，无重复操作
+- 模拟的 Windows 媒体键（Play/Pause/Previous/Next）工作正常
+- 快速连续下一首正确留下最终曲目和元数据
+- 最小化和全屏状态下控件继续工作
+- 现有应用内播放控件和进度条跳转保持正常
+- 桌面歌词和设置正常打开和关闭
+- 应用退出清除系统媒体状态；无残留进程
+
+**已知限制**：
+- 无 `setPositionState()`，无系统进度同步，无系统跳转操作，无 stop 操作
+- 物理耳机按钮未经验证（需实际硬件测试）
+- 锁屏界面未经单独验证
+
+**不应回退的边界**：
+- 在 Media Session 已处理媒体键的情况下，不得通过第二条 Electron globalShortcut 路径实现媒体键
+- 不得用模拟按钮点击替代真实播放函数
+- 不得创建另一个音频对象、队列或播放状态
+- 位置状态支持需要单独的后续任务，并需严格校验时长
+- Media Session 元数据失败绝不能阻断播放
+- 最终失败清理必须保持令牌守卫
