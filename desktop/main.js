@@ -457,6 +457,52 @@ function sendTrayPlaybackCommand(action) {
   }
 }
 
+const DESKTOP_LYRICS_TOOLBAR_COMMANDS = Object.freeze({
+  previous: 'prevTrack',
+  'toggle-playback': 'togglePlay',
+  next: 'nextTrack',
+  'line-single': 'desktopLyricsLineSingle',
+  'line-double': 'desktopLyricsLineDouble',
+  'align-left': 'desktopLyricsAlignLeft',
+  'align-center': 'desktopLyricsAlignCenter',
+  'align-right': 'desktopLyricsAlignRight',
+  'restore-defaults': 'desktopLyricsRestoreDefaults',
+});
+const DESKTOP_LYRICS_FONT_SIZE_MIN = 0.72;
+const DESKTOP_LYRICS_FONT_SIZE_MAX = 1.55;
+const DESKTOP_LYRICS_FONT_SIZE_STEP = 0.01;
+
+function isDesktopLyricsSender(event) {
+  return !!(
+    event &&
+    desktopLyricsWindow &&
+    !desktopLyricsWindow.isDestroyed() &&
+    desktopLyricsWindow.webContents &&
+    !desktopLyricsWindow.webContents.isDestroyed() &&
+    event.sender === desktopLyricsWindow.webContents
+  );
+}
+
+function sendDesktopLyricsToolbarAction(action) {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) return false;
+  mainWindow.webContents.send('mineradio-global-hotkey', { action: action });
+  return true;
+}
+
+function normalizeDesktopLyricsToolbarFontSize(value) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return null;
+  const clamped = Math.max(DESKTOP_LYRICS_FONT_SIZE_MIN, Math.min(DESKTOP_LYRICS_FONT_SIZE_MAX, raw));
+  const stepped = Math.round(clamped / DESKTOP_LYRICS_FONT_SIZE_STEP) * DESKTOP_LYRICS_FONT_SIZE_STEP;
+  return Math.max(DESKTOP_LYRICS_FONT_SIZE_MIN, Math.min(DESKTOP_LYRICS_FONT_SIZE_MAX, Number(stepped.toFixed(2))));
+}
+
+function sendDesktopLyricsToolbarFontSize(value) {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) return false;
+  mainWindow.webContents.send('mineradio-desktop-lyrics-toolbar-font-size', { value });
+  return true;
+}
+
 function createTray() {
   if (process.platform !== 'win32') return;
   if (tray) return;
@@ -1582,6 +1628,28 @@ ipcMain.handle('mineradio-desktop-lyrics-move-by', async (_event, dx, dy) => {
   } catch (e) {
     return { ok: false, error: e.message || 'DESKTOP_LYRICS_MOVE_FAILED' };
   }
+});
+
+ipcMain.handle('mineradio-desktop-lyrics-toolbar-command', async (event, command) => {
+  try {
+    if (!isDesktopLyricsSender(event)) return { ok: false, error: 'INVALID_DESKTOP_LYRICS_SENDER' };
+    if (typeof command !== 'string') return { ok: false, error: 'INVALID_DESKTOP_LYRICS_COMMAND' };
+    const normalized = command.trim();
+    const action = DESKTOP_LYRICS_TOOLBAR_COMMANDS[normalized];
+    if (!action) return { ok: false, error: 'INVALID_DESKTOP_LYRICS_COMMAND' };
+    if (!sendDesktopLyricsToolbarAction(action)) return { ok: false, error: 'NO_MAIN_WINDOW' };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || 'DESKTOP_LYRICS_TOOLBAR_FAILED' };
+  }
+});
+
+ipcMain.handle('mineradio-desktop-lyrics-toolbar-font-size', async (event, value) => {
+  if (!isDesktopLyricsSender(event)) return { ok: false, error: 'INVALID_DESKTOP_LYRICS_FONT_SIZE' };
+  const normalized = normalizeDesktopLyricsToolbarFontSize(value);
+  if (normalized == null) return { ok: false, error: 'INVALID_DESKTOP_LYRICS_FONT_SIZE' };
+  if (!sendDesktopLyricsToolbarFontSize(normalized)) return { ok: false, error: 'INVALID_DESKTOP_LYRICS_FONT_SIZE' };
+  return { ok: true, value: normalized };
 });
 
 ipcMain.handle('mineradio-wallpaper-set-enabled', async (_event, enabled, payload) => {

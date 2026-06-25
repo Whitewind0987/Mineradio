@@ -7792,6 +7792,34 @@ function normalizeHexColor(value, fallback) {
   fallback = /^#[0-9a-f]{6}$/i.test(String(fallback || '')) ? String(fallback).toLowerCase() : '#a9b8c8';
   return /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : fallback;
 }
+var DESKTOP_LYRICS_SIZE_MIN = 0.72;
+var DESKTOP_LYRICS_SIZE_MAX = 1.55;
+var DESKTOP_LYRICS_SIZE_STEP = 0.01;
+function updateDesktopLyricsSizeUI() {
+  var slider = document.getElementById('fx-desktoplyricssize');
+  if (slider) slider.value = fx.desktopLyricsSize;
+  var output = slider && slider.parentElement && slider.parentElement.querySelector('output');
+  if (output) output.textContent = Number(fx.desktopLyricsSize).toFixed(2);
+}
+function setDesktopLyricsSize(value) {
+  var next = Number(value);
+  if (!isFinite(next)) next = fxDefaults.desktopLyricsSize;
+  next = clampRange(next, DESKTOP_LYRICS_SIZE_MIN, DESKTOP_LYRICS_SIZE_MAX);
+  fx.desktopLyricsSize = Math.round(next / DESKTOP_LYRICS_SIZE_STEP) * DESKTOP_LYRICS_SIZE_STEP;
+  fx.desktopLyricsSize = clampRange(fx.desktopLyricsSize, DESKTOP_LYRICS_SIZE_MIN, DESKTOP_LYRICS_SIZE_MAX);
+  updateDesktopLyricsSizeUI();
+  saveLyricLayout();
+  pushDesktopLyricsState(true);
+}
+function restoreDesktopLyricsToolbarDefaults() {
+  fx.desktopLyricsLineMode = fxDefaults.desktopLyricsLineMode || 'single';
+  fx.desktopLyricsAlignment = fxDefaults.desktopLyricsAlignment || 'center';
+  fx.desktopLyricsSize = clampRange(Number(fxDefaults.desktopLyricsSize) || 1, DESKTOP_LYRICS_SIZE_MIN, DESKTOP_LYRICS_SIZE_MAX);
+  updateDesktopLyricsSizeUI();
+  applyDesktopLyricsLineModeUI();
+  saveLyricLayout();
+  pushDesktopLyricsState(true);
+}
 function setDesktopLyricsLineMode(value) {
   fx.desktopLyricsLineMode = value === 'double' ? 'double' : 'single';
   saveLyricLayout();
@@ -22588,6 +22616,12 @@ function executeHotkeyAction(actionKey, source) {
   if (actionKey === 'togglePlay') return togglePlay();
   if (actionKey === 'prevTrack') return prevTrack();
   if (actionKey === 'nextTrack') return nextTrack();
+  if (actionKey === 'desktopLyricsLineSingle') return setDesktopLyricsLineMode('single');
+  if (actionKey === 'desktopLyricsLineDouble') return setDesktopLyricsLineMode('double');
+  if (actionKey === 'desktopLyricsAlignLeft') return setDesktopLyricsAlignment('left');
+  if (actionKey === 'desktopLyricsAlignCenter') return setDesktopLyricsAlignment('center');
+  if (actionKey === 'desktopLyricsAlignRight') return setDesktopLyricsAlignment('right');
+  if (actionKey === 'desktopLyricsRestoreDefaults') return restoreDesktopLyricsToolbarDefaults();
   if (actionKey === 'volumeUp') return adjustVolumeByKeyboard(0.05);
   if (actionKey === 'volumeDown') return adjustVolumeByKeyboard(-0.05);
   if (actionKey === 'toggleFullscreen') return toggleFullscreen();
@@ -22782,6 +22816,7 @@ function registerGlobalHotkeys() {
   });
 }
 var globalHotkeyListenerBound = false;
+var desktopLyricsToolbarFontSizeListenerBound = false;
 function bindHotkeySettings() {
   ensureHotkeySettingsButton();
   ensureHotkeyModal();
@@ -22792,6 +22827,16 @@ function bindHotkeySettings() {
       api.onGlobalHotkey(function(payload){
         if (!payload || !payload.action) return;
         executeHotkeyAction(payload.action, 'global');
+      });
+    }
+  }
+  if (!desktopLyricsToolbarFontSizeListenerBound) {
+    var toolbarApi = getDesktopWindowApi && getDesktopWindowApi();
+    if (toolbarApi && typeof toolbarApi.onDesktopLyricsToolbarFontSize === 'function') {
+      desktopLyricsToolbarFontSizeListenerBound = true;
+      toolbarApi.onDesktopLyricsToolbarFontSize(function(payload){
+        if (!payload || !isFinite(Number(payload.value))) return;
+        setDesktopLyricsSize(payload.value);
       });
     }
   }
@@ -27040,7 +27085,7 @@ function pushDesktopLyricsState(force) {
   var payload = desktopLyricsPayload(!!force);
   var colors = payload.colors || {};
   var motion = payload.motion || {};
-  var key = payload.enabled + '|' + payload.text + '|' + Math.round(payload.progress * 1000) + '|' + Math.round((payload.progressSpan || 0) * 100) + '|' + payload.playing + '|' + payload.size + '|' + payload.opacity + '|' + payload.y + '|' + payload.clickThrough + '|' + payload.cinema + '|' + payload.highlightFollow + '|' + payload.frameRate + '|' + payload.fontFamily + '|' + payload.fontWeight + '|' + payload.letterSpacing + '|' + payload.lineHeight + '|' + payload.lyricScale + '|' + payload.feather + '|' + payload.beatMapKey + '|' + colors.primary + '|' + colors.secondary + '|' + colors.highlight + '|' + colors.glow + '|' + motion.lyricGlow + '|' + motion.lyricGlowBeat + '|' + Math.round((motion.lyricGlowStrength || 0) * 100) + '|' + Math.round((motion.highBloom || 0) * 100) + '|' + Math.round((motion.beatGlow || 0) * 100) + '|' + Math.round((motion.beatPulse || 0) * 100) + '|' + Math.round((motion.bass || 0) * 100);
+  var key = payload.enabled + '|' + payload.text + '|' + Math.round(payload.progress * 1000) + '|' + Math.round((payload.progressSpan || 0) * 100) + '|' + payload.playing + '|' + payload.lineMode + '|' + payload.alignment + '|' + payload.size + '|' + payload.opacity + '|' + payload.y + '|' + payload.clickThrough + '|' + payload.cinema + '|' + payload.highlightFollow + '|' + payload.frameRate + '|' + payload.fontFamily + '|' + payload.fontWeight + '|' + payload.letterSpacing + '|' + payload.lineHeight + '|' + payload.lyricScale + '|' + payload.feather + '|' + payload.beatMapKey + '|' + colors.primary + '|' + colors.secondary + '|' + colors.highlight + '|' + colors.glow + '|' + motion.lyricGlow + '|' + motion.lyricGlowBeat + '|' + Math.round((motion.lyricGlowStrength || 0) * 100) + '|' + Math.round((motion.highBloom || 0) * 100) + '|' + Math.round((motion.beatGlow || 0) * 100) + '|' + Math.round((motion.beatPulse || 0) * 100) + '|' + Math.round((motion.bass || 0) * 100);
   if (!force && key === desktopOverlayPushState.lastLyricsKey && now - desktopOverlayPushState.lyricsAt < 900) return;
   desktopOverlayPushState.lyricsAt = now;
   desktopOverlayPushState.lastLyricsKey = key;

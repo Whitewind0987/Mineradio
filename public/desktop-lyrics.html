@@ -139,15 +139,14 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      gap:7px;
-      min-width:92px;
-      min-height:30px;
-      padding:0 11px;
+      gap:4px;
+      min-height:34px;
+      padding:4px 6px;
       border-radius:999px;
       border:1px solid color-mix(in srgb,var(--lyric-glow) 58%,rgba(255,255,255,.36));
       background:rgba(4,6,10,.44);
       color:rgba(255,255,255,.84);
-      font:800 12px/1 "Microsoft YaHei",sans-serif;
+      font:800 12px/1 var(--lyric-font);
       text-shadow:0 1px 10px rgba(0,0,0,.55);
       box-shadow:0 0 20px color-mix(in srgb,var(--lyric-glow) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.16);
       opacity:0;
@@ -156,34 +155,76 @@
       transition:opacity .16s ease,transform .16s ease;
       -webkit-app-region:no-drag;
     }
-    .lock-icon{
+    .toolbar-btn{
       position:relative;
-      width:13px;
-      height:13px;
-      flex:0 0 auto;
-    }
-    .lock-icon::before{content:"";position:absolute;left:2px;bottom:1px;width:9px;height:7px;border:1.7px solid var(--lyric-highlight);border-radius:2px;box-sizing:border-box}
-    .lock-icon::after{content:"";position:absolute;left:3px;top:0;width:7px;height:8px;border:1.7px solid var(--lyric-highlight);border-bottom:0;border-radius:7px 7px 0 0;box-sizing:border-box}
-    body.unlocked .lock-icon::after{left:7px;transform:rotate(24deg);transform-origin:left bottom}
-    .lyrics-close{
-      display:none;
+      display:inline-flex;
       align-items:center;
       justify-content:center;
-      height:22px;
-      width:auto;
-      margin-right:-4px;
+      width:28px;
+      height:28px;
+      flex:0 0 28px;
       border:0;
-      border-left:1px solid rgba(255,255,255,.14);
-      padding:0 0 1px 9px;
-      background:transparent;
-      color:rgba(255,255,255,.82);
-      font:800 12px/1 "Microsoft YaHei",sans-serif;
+      border-radius:999px;
+      padding:0;
+      background:rgba(255,255,255,.08);
+      color:rgba(255,255,255,.84);
       cursor:pointer;
-      text-shadow:0 0 12px var(--lyric-primary);
+      transition:background .14s ease,color .14s ease,transform .14s ease,opacity .14s ease;
       -webkit-app-region:no-drag;
     }
-    .lyrics-close:hover{color:#fff}
-    body.unlocked .lyrics-close{display:flex}
+    .toolbar-btn svg{
+      width:15px;
+      height:15px;
+      flex:0 0 auto;
+      fill:none;
+      stroke:currentColor;
+      stroke-width:2.1;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      pointer-events:none;
+    }
+    .toolbar-btn .pause-shape{display:none}
+    .toolbar-btn.playing .play-shape{display:none}
+    .toolbar-btn.playing .pause-shape{display:block}
+    .toolbar-btn:hover{background:rgba(255,255,255,.16);color:#fff}
+    .toolbar-btn:active{transform:scale(.94)}
+    .toolbar-btn.active{background:color-mix(in srgb,var(--lyric-glow) 24%,rgba(255,255,255,.08));color:var(--lyric-highlight)}
+    .toolbar-btn:disabled{opacity:.38;cursor:default}
+    .toolbar-btn:disabled:active{transform:none}
+    .toolbar-sep{width:1px;height:19px;margin:0 2px;background:rgba(255,255,255,.16);flex:0 0 1px}
+    .toolbar-glyph{font:900 12px/1 var(--lyric-font);letter-spacing:0;pointer-events:none}
+    .toolbar-size-control{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      height:28px;
+      padding:0 4px 0 7px;
+      border-radius:999px;
+      background:rgba(255,255,255,.08);
+      color:rgba(255,255,255,.82);
+      -webkit-app-region:no-drag;
+    }
+    .toolbar-size-control input{
+      width:74px;
+      height:16px;
+      margin:0;
+      accent-color:var(--lyric-highlight);
+      cursor:pointer;
+      -webkit-app-region:no-drag;
+    }
+    .toolbar-size-value{
+      min-width:34px;
+      text-align:right;
+      font:900 11px/1 var(--lyric-font);
+      letter-spacing:0;
+      color:rgba(255,255,255,.86);
+      pointer-events:none;
+    }
+    .lyrics-close{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
     body.unlocked .stage.hint-visible .lock-hint{pointer-events:auto;-webkit-app-region:no-drag}
     .stage.hint-visible .lock-hint{opacity:.94;transform:translateX(-50%) translateY(0) scale(1)}
     @keyframes lyr-in{
@@ -198,7 +239,25 @@
   <div class="wrap">
     <div id="stage" class="stage">
       <div id="lyricViewport" class="lyric-viewport"><div id="lyricScroller" class="lyric-scroll"><div id="line" class="line" data-text="Mineradio">Mineradio</div><div id="nextLine" class="next-line"></div></div></div>
-      <div id="lockHint" class="lock-hint"><span class="lock-icon"></span><span id="lockText">&#20013;&#38190;&#35299;&#38145;</span><button id="closeLyricsBtn" class="lyrics-close" type="button" aria-label="Close desktop lyrics">&#20851;&#38381;&#26700;&#38754;&#27468;&#35789;</button></div>
+      <div id="lockHint" class="lock-hint lyrics-toolbar" role="toolbar" aria-label="桌面歌词工具栏">
+        <button class="toolbar-btn" type="button" data-toolbar-command="previous" aria-label="上一首" title="上一首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5v14"/><path d="m15 7-8 5 8 5z"/><path d="M5 7v10"/></svg></button>
+        <button id="toolbarPlayBtn" class="toolbar-btn" type="button" data-toolbar-command="toggle-playback" aria-label="播放" title="播放"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="play-shape" d="m8 5 11 7-11 7z"/><path class="pause-shape" d="M8 5v14"/><path class="pause-shape" d="M16 5v14"/></svg></button>
+        <button class="toolbar-btn" type="button" data-toolbar-command="next" aria-label="下一首" title="下一首"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v14"/><path d="m9 7 8 5-8 5z"/><path d="M19 7v10"/></svg></button>
+        <span class="toolbar-sep" aria-hidden="true"></span>
+        <button id="toolbarLineModeBtn" class="toolbar-btn" type="button" data-toolbar-command="line-double" aria-label="切换为双行" title="切换为双行"><span class="toolbar-glyph">2</span></button>
+        <button class="toolbar-btn" type="button" data-toolbar-command="align-left" data-align="left" aria-label="左对齐" title="左对齐"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h11"/><path d="M4 18h15"/></svg></button>
+        <button class="toolbar-btn" type="button" data-toolbar-command="align-center" data-align="center" aria-label="居中" title="居中"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M7 12h10"/><path d="M5 18h14"/></svg></button>
+        <button class="toolbar-btn" type="button" data-toolbar-command="align-right" data-align="right" aria-label="右对齐" title="右对齐"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M9 12h11"/><path d="M5 18h15"/></svg></button>
+        <span class="toolbar-sep" aria-hidden="true"></span>
+        <label class="toolbar-size-control" aria-label="字体大小" title="字体大小">
+          <input id="toolbarFontSizeSlider" type="range" min="0.72" max="1.55" step="0.01" aria-label="字体大小">
+          <span id="toolbarFontSizeValue" class="toolbar-size-value">100%</span>
+        </label>
+        <span class="toolbar-sep" aria-hidden="true"></span>
+        <button id="toolbarResetBtn" class="toolbar-btn" type="button" data-toolbar-command="restore-defaults" aria-label="恢复默认" title="恢复默认"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v5h5"/><path d="M20 18v-5h-5"/><path d="M6.4 9.2A7 7 0 0 1 18.8 7"/><path d="M17.6 14.8A7 7 0 0 1 5.2 17"/></svg></button>
+        <button id="toolbarLockBtn" class="toolbar-btn" type="button" aria-label="锁定桌面歌词" title="锁定桌面歌词"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+        <button id="closeLyricsBtn" class="toolbar-btn lyrics-close" type="button" aria-label="关闭桌面歌词" title="关闭桌面歌词"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
     </div>
   </div>
   <script>
@@ -210,7 +269,12 @@
     var line = document.getElementById('line');
     var nextLine = document.getElementById('nextLine');
     var lockHint = document.getElementById('lockHint');
-    var lockText = document.getElementById('lockText');
+    var toolbarPlayBtn = document.getElementById('toolbarPlayBtn');
+    var toolbarLineModeBtn = document.getElementById('toolbarLineModeBtn');
+    var toolbarFontSizeSlider = document.getElementById('toolbarFontSizeSlider');
+    var toolbarFontSizeValue = document.getElementById('toolbarFontSizeValue');
+    var toolbarResetBtn = document.getElementById('toolbarResetBtn');
+    var toolbarLockBtn = document.getElementById('toolbarLockBtn');
     var closeLyricsBtn = document.getElementById('closeLyricsBtn');
     var dpr = 1;
     var lastText = '';
@@ -229,6 +293,14 @@
     var hintVisible = false;
     var hintTimer = 0;
     var lastPointerEvent = null;
+    var toolbarPointerInside = false;
+    var toolbarPressing = false;
+    var toolbarPressCanceled = false;
+    var toolbarPressStart = { x:0, y:0 };
+    var toolbarSliderActive = false;
+    var toolbarFontSizeTimer = 0;
+    var toolbarFontSizePending = null;
+    var toolbarResetPending = false;
     var scrollState = { needed:false, overflow:0, limit:0, offset:0, dir:-1, holdUntil:0, lastAt:0 };
     var particles = [];
     var live = { solar:0, beat:0, bass:0, scale:1, glow:0, spark:0, lift:0 };
@@ -700,7 +772,8 @@
       var locked = isLocked();
       document.body.classList.toggle('locked', locked);
       document.body.classList.toggle('unlocked', !locked);
-      if (lockText) lockText.textContent = locked ? '\u4e2d\u952e\u89e3\u9501' : '\u4e2d\u952e\u9501\u5b9a';
+      if (locked) setHintVisible(false);
+      updateToolbarState();
     }
     function setPointerCapture(active) {
       active = !!active;
@@ -710,17 +783,121 @@
         window.desktopOverlay.setLyricsPointerCapture(active).catch(function(){});
       }
     }
+    function toolbarElementFromTarget(target) {
+      return target && target.closest ? target.closest('#lockHint') : null;
+    }
+    function isToolbarTarget(target) {
+      return !!toolbarElementFromTarget(target);
+    }
+    function isToolbarSliderTarget(target) {
+      return !!(target && target.closest && target.closest('.toolbar-size-control'));
+    }
+    function lyricHotPadding() {
+      return {
+        x: Math.max(26, Math.min(72, innerWidth * .038)),
+        y: Math.max(24, Math.min(56, innerHeight * .052))
+      };
+    }
+    function pointInToolbar(evt) {
+      if (!evt || !lockHint || !hintVisible || isLocked()) return false;
+      return pointInRect(evt, lockHint.getBoundingClientRect(), 10, 10);
+    }
+    function pointInLyricHotArea(evt) {
+      if (!state.enabled || !evt) return false;
+      var pad = lyricHotPadding();
+      return pointInRect(evt, lyricViewport.getBoundingClientRect(), pad.x, pad.y);
+    }
     function sendHotBounds() {
       if (!window.desktopOverlay || !window.desktopOverlay.setLyricsHotBounds) return;
       var rect = lyricViewport.getBoundingClientRect();
-      var padX = Math.max(26, Math.min(72, innerWidth * .038));
-      var padY = Math.max(24, Math.min(56, innerHeight * .052));
+      var pad = lyricHotPadding();
+      var bounds = {
+        left:rect.left - pad.x,
+        top:rect.top - pad.y,
+        right:rect.right + pad.x,
+        bottom:rect.bottom + pad.y
+      };
+      if (hintVisible && !isLocked() && lockHint) {
+        var hintRect = lockHint.getBoundingClientRect();
+        bounds.left = Math.min(bounds.left, hintRect.left - 10);
+        bounds.top = Math.min(bounds.top, hintRect.top - 10);
+        bounds.right = Math.max(bounds.right, hintRect.right + 10);
+        bounds.bottom = Math.max(bounds.bottom, hintRect.bottom + 10);
+      }
       window.desktopOverlay.setLyricsHotBounds({
-        left:rect.left - padX,
-        top:rect.top - padY,
-        right:rect.right + padX,
-        bottom:rect.bottom + padY
+        left:bounds.left,
+        top:bounds.top,
+        right:bounds.right,
+        bottom:bounds.bottom
       }).catch(function(){});
+    }
+    function normalizeToolbarFontSize(value) {
+      var raw = Number(value);
+      if (!isFinite(raw)) raw = 1;
+      var stepped = Math.round(clamp(raw, .72, 1.55, 1) / .01) * .01;
+      return clamp(Number(stepped.toFixed(2)), .72, 1.55, 1);
+    }
+    function updateToolbarFontSizeUI(value) {
+      var size = normalizeToolbarFontSize(value);
+      if (toolbarFontSizeSlider) toolbarFontSizeSlider.value = size.toFixed(2);
+      if (toolbarFontSizeValue) toolbarFontSizeValue.textContent = Math.round(size * 100) + '%';
+    }
+    function applyToolbarFontSizePreview(value) {
+      var size = normalizeToolbarFontSize(value);
+      state.size = size;
+      baseFontSize = Math.round(58 * size);
+      updateToolbarFontSizeUI(size);
+      layoutKey = '';
+      fitLyricText(false);
+    }
+    function flushToolbarFontSize(value) {
+      if (value != null) toolbarFontSizePending = normalizeToolbarFontSize(value);
+      if (toolbarFontSizeTimer) {
+        clearTimeout(toolbarFontSizeTimer);
+        toolbarFontSizeTimer = 0;
+      }
+      if (toolbarFontSizePending == null) return;
+      var next = toolbarFontSizePending;
+      toolbarFontSizePending = null;
+      if (window.desktopOverlay && window.desktopOverlay.setLyricsToolbarFontSize) {
+        window.desktopOverlay.setLyricsToolbarFontSize(next).catch(function(){});
+      }
+    }
+    function scheduleToolbarFontSize(value) {
+      toolbarFontSizePending = normalizeToolbarFontSize(value);
+      if (toolbarFontSizeTimer) return;
+      toolbarFontSizeTimer = setTimeout(function(){
+        toolbarFontSizeTimer = 0;
+        flushToolbarFontSize();
+      }, 50);
+    }
+    function updateToolbarState() {
+      if (!lockHint) return;
+      if (toolbarPlayBtn) {
+        toolbarPlayBtn.classList.toggle('playing', !!state.playing);
+        var playLabel = state.playing ? '\u6682\u505c' : '\u64ad\u653e';
+        toolbarPlayBtn.setAttribute('aria-label', playLabel);
+        toolbarPlayBtn.title = playLabel;
+      }
+      if (toolbarLineModeBtn) {
+        var doubleMode = state.lineMode === 'double';
+        var lineModeLabel = doubleMode ? '\u5207\u6362\u4e3a\u5355\u884c' : '\u5207\u6362\u4e3a\u53cc\u884c';
+        toolbarLineModeBtn.setAttribute('data-toolbar-command', doubleMode ? 'line-single' : 'line-double');
+        toolbarLineModeBtn.classList.toggle('active', doubleMode);
+        toolbarLineModeBtn.setAttribute('aria-label', lineModeLabel);
+        toolbarLineModeBtn.title = lineModeLabel;
+        var glyph = toolbarLineModeBtn.querySelector('.toolbar-glyph');
+        if (glyph) glyph.textContent = doubleMode ? '1' : '2';
+      }
+      var align = state.alignment === 'left' || state.alignment === 'right' ? state.alignment : 'center';
+      var alignBtns = lockHint.querySelectorAll('[data-align]');
+      for (var i = 0; i < alignBtns.length; i++) {
+        alignBtns[i].classList.toggle('active', alignBtns[i].getAttribute('data-align') === align);
+      }
+      var size = clamp(Number(state.size) || 1, .72, 1.55, 1);
+      updateToolbarFontSizeUI(size);
+      if (toolbarResetBtn) toolbarResetBtn.disabled = toolbarResetPending;
+      if (toolbarLockBtn) toolbarLockBtn.disabled = isLocked();
     }
     function applyState(next){
       next = next || {};
@@ -789,6 +966,7 @@
         nextLine.style.display = (state.lineMode === 'double' && nlText) ? '' : 'none';
         nextLine.style.textAlign = state.alignment === 'left' ? 'left' : state.alignment === 'right' ? 'right' : 'center';
       }
+      updateToolbarState();
       if (text !== lastText) {
         lastText = text;
         progressText = text;
@@ -1055,24 +1233,19 @@
     function pointInStage(evt) {
       if (!state.enabled || !evt) return false;
       if (dragging) return true;
-      if (!isLocked()) {
-        var stageRect = stage.getBoundingClientRect();
-        return pointInRect(evt, stageRect, 0, 0);
-      }
-      var padX = Math.max(24, Math.min(68, innerWidth * .034));
-      var padY = Math.max(22, Math.min(46, innerHeight * .045));
-      var lyricRect = lyricViewport.getBoundingClientRect();
-      if (pointInRect(evt, lyricRect, padX, padY)) return true;
-      var hintRect = lockHint.getBoundingClientRect();
-      return pointInRect(evt, hintRect, 10, 10);
+      if (!isLocked() && pointInToolbar(evt)) return true;
+      return pointInLyricHotArea(evt);
     }
     function setHintVisible(visible) {
-      hintVisible = !!visible;
+      hintVisible = !!visible && state.enabled && !isLocked();
       stage.classList.toggle('hint-visible', hintVisible);
-      setPointerCapture(!isLocked() && (hintVisible || dragging) && hoverInside);
+      sendHotBounds();
+      setPointerCapture(!isLocked() && (hintVisible || dragging) && (hoverInside || toolbarPointerInside || toolbarPressing || toolbarSliderActive));
     }
     function hideInteractionHint() {
+      if (toolbarPressing || toolbarSliderActive) return;
       hoverInside = false;
+      toolbarPointerInside = false;
       lastPointerEvent = null;
       if (hintTimer) {
         clearTimeout(hintTimer);
@@ -1082,33 +1255,40 @@
       stage.classList.remove('hover');
     }
     function scheduleInteractionHint() {
-      if (hintVisible || hintTimer) return;
+      if (isLocked() || !state.enabled) return;
+      if (hintTimer) {
+        clearTimeout(hintTimer);
+        hintTimer = 0;
+      }
+      setHintVisible(true);
+    }
+    function scheduleToolbarHide() {
+      if (hintTimer) clearTimeout(hintTimer);
       hintTimer = setTimeout(function(){
         hintTimer = 0;
-        if (!hoverInside || !lastPointerEvent || !pointInStage(lastPointerEvent)) return;
-        setHintVisible(true);
-      }, 1500);
+        if (toolbarPressing || toolbarSliderActive || dragging || hoverInside || toolbarPointerInside) return;
+        hideInteractionHint();
+      }, 360);
     }
     function updateHover(evt) {
-      var inside = !!state.enabled && pointInStage(evt);
-      hoverInside = inside;
+      var lyricInside = !!state.enabled && pointInLyricHotArea(evt);
+      var toolbarInside = !!state.enabled && pointInToolbar(evt);
+      var inside = lyricInside || toolbarInside || dragging || toolbarPressing || toolbarSliderActive;
+      hoverInside = lyricInside;
+      toolbarPointerInside = toolbarInside;
       lastPointerEvent = evt || lastPointerEvent;
       stage.classList.toggle('hover', inside || dragging);
       if (isLocked()) {
-        if (inside || dragging) {
-          scheduleInteractionHint();
-        } else {
-          hideInteractionHint();
-        }
         setPointerCapture(false);
+        if (!dragging) hideInteractionHint();
         return inside;
       }
       if (inside || dragging) {
         scheduleInteractionHint();
       } else {
-        hideInteractionHint();
+        scheduleToolbarHide();
       }
-      setPointerCapture(inside || dragging);
+      setPointerCapture(inside || dragging || hintVisible);
       return inside;
     }
     function setLocked(locked) {
@@ -1165,8 +1345,8 @@
       if (!dragging) hideInteractionHint();
     });
     window.addEventListener('pointerdown', function(evt){
+      if (isToolbarTarget(evt.target)) return;
       if (!pointInStage(evt)) return;
-      if (closeLyricsBtn && closeLyricsBtn.contains(evt.target)) return;
       if (evt.button === 1) {
         evt.preventDefault();
         hideInteractionHint();
@@ -1196,24 +1376,160 @@
     window.addEventListener('pointercancel', endDrag);
     window.addEventListener('blur', function(){
       endDrag({ pointerId:dragPointerId });
+      toolbarPressing = false;
+      toolbarPressCanceled = false;
+      toolbarSliderActive = false;
+      flushToolbarFontSize();
       hideInteractionHint();
     });
     stage.addEventListener('lostpointercapture', endDrag);
     window.addEventListener('auxclick', function(evt){
       if (evt.button === 1 && pointInStage(evt)) evt.preventDefault();
     });
-    if (closeLyricsBtn) {
-      closeLyricsBtn.addEventListener('click', function(evt){
+    function runToolbarCommand(command) {
+      if (!command || !window.desktopOverlay || !window.desktopOverlay.runLyricsToolbarCommand) return Promise.resolve(null);
+      return window.desktopOverlay.runLyricsToolbarCommand(command).catch(function(){ return null; });
+    }
+    function closeDesktopLyricsFromToolbar() {
+      state.enabled = false;
+      document.body.classList.remove('show');
+      hideInteractionHint();
+      setPointerCapture(false);
+      if (window.desktopOverlay && window.desktopOverlay.closeLyrics) {
+        window.desktopOverlay.closeLyrics().catch(function(){});
+      }
+    }
+    function finishToolbarPress() {
+      toolbarPressing = false;
+      if (!toolbarPointerInside && !hoverInside && !dragging) scheduleToolbarHide();
+    }
+    if (lockHint) {
+      lockHint.addEventListener('pointerenter', function(evt){
+        toolbarPointerInside = true;
+        lastPointerEvent = evt;
+        if (!isLocked()) scheduleInteractionHint();
+      });
+      lockHint.addEventListener('pointerleave', function(){
+        toolbarPointerInside = false;
+        if (!toolbarPressing) scheduleToolbarHide();
+      });
+      lockHint.addEventListener('pointerdown', function(evt){
+        if (isToolbarSliderTarget(evt.target)) return;
         evt.preventDefault();
         evt.stopPropagation();
-        state.enabled = false;
-        document.body.classList.remove('show');
-        setPointerCapture(false);
-        if (window.desktopOverlay && window.desktopOverlay.closeLyrics) {
-          window.desktopOverlay.closeLyrics().catch(function(){});
+        var btn = evt.target && evt.target.closest ? evt.target.closest('.toolbar-btn') : null;
+        if (!btn || btn.disabled || evt.button !== 0) {
+          toolbarPressing = false;
+          toolbarPressCanceled = true;
+          return;
         }
+        toolbarPressing = true;
+        toolbarPressCanceled = false;
+        toolbarPressStart.x = evt.clientX;
+        toolbarPressStart.y = evt.clientY;
+        setPointerCapture(true);
+        try {
+          if (btn.setPointerCapture) btn.setPointerCapture(evt.pointerId);
+        } catch (e) {}
+      });
+      lockHint.addEventListener('pointermove', function(evt){
+        if (!toolbarPressing) return;
+        var dx = evt.clientX - toolbarPressStart.x;
+        var dy = evt.clientY - toolbarPressStart.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 8) toolbarPressCanceled = true;
+      });
+      lockHint.addEventListener('pointerup', function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        finishToolbarPress();
+      });
+      lockHint.addEventListener('pointercancel', function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        toolbarPressCanceled = true;
+        finishToolbarPress();
+      });
+      lockHint.addEventListener('click', function(evt){
+        if (isToolbarSliderTarget(evt.target)) {
+          evt.stopPropagation();
+          return;
+        }
+        var btn = evt.target && evt.target.closest ? evt.target.closest('.toolbar-btn') : null;
+        if (!btn || btn.disabled) return;
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (toolbarPressCanceled) {
+          toolbarPressCanceled = false;
+          return;
+        }
+        if (btn === closeLyricsBtn) {
+          closeDesktopLyricsFromToolbar();
+          return;
+        }
+        if (btn === toolbarLockBtn) {
+          hideInteractionHint();
+          setLocked(true);
+          return;
+        }
+        if (btn === toolbarResetBtn) {
+          toolbarResetPending = true;
+          updateToolbarState();
+          scheduleInteractionHint();
+          runToolbarCommand(btn.getAttribute('data-toolbar-command')).finally(function(){
+            toolbarResetPending = false;
+            updateToolbarState();
+          });
+          return;
+        }
+        runToolbarCommand(btn.getAttribute('data-toolbar-command'));
       });
     }
+    function finishToolbarSlider() {
+      if (!toolbarSliderActive) return;
+      toolbarSliderActive = false;
+      flushToolbarFontSize(toolbarFontSizeSlider && toolbarFontSizeSlider.value);
+      if (!toolbarPointerInside && !hoverInside && !dragging) scheduleToolbarHide();
+    }
+    if (toolbarFontSizeSlider) {
+      toolbarFontSizeSlider.addEventListener('pointerdown', function(evt){
+        if (evt.button != null && evt.button !== 0) return;
+        evt.stopPropagation();
+        toolbarSliderActive = true;
+        toolbarPointerInside = true;
+        toolbarPressing = false;
+        toolbarPressCanceled = false;
+        setPointerCapture(true);
+        scheduleInteractionHint();
+      });
+      toolbarFontSizeSlider.addEventListener('input', function(evt){
+        evt.stopPropagation();
+        applyToolbarFontSizePreview(toolbarFontSizeSlider.value);
+        scheduleToolbarFontSize(toolbarFontSizeSlider.value);
+      });
+      toolbarFontSizeSlider.addEventListener('change', function(evt){
+        evt.stopPropagation();
+        applyToolbarFontSizePreview(toolbarFontSizeSlider.value);
+        flushToolbarFontSize(toolbarFontSizeSlider.value);
+      });
+      toolbarFontSizeSlider.addEventListener('pointerup', function(evt){
+        evt.stopPropagation();
+        finishToolbarSlider();
+      });
+      toolbarFontSizeSlider.addEventListener('pointercancel', function(evt){
+        evt.stopPropagation();
+        finishToolbarSlider();
+      });
+      toolbarFontSizeSlider.addEventListener('click', function(evt){
+        evt.stopPropagation();
+      });
+      toolbarFontSizeSlider.addEventListener('blur', finishToolbarSlider);
+    }
+    window.addEventListener('beforeunload', function(){
+      if (toolbarFontSizeTimer) {
+        clearTimeout(toolbarFontSizeTimer);
+        toolbarFontSizeTimer = 0;
+      }
+    });
     window.__mineradioDesktopLyricsApplyState = applyState;
     window.addEventListener('message', function(event){
       var data = event && event.data;

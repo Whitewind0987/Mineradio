@@ -375,3 +375,29 @@ npm start
 **已知限制**：主窗口移动时偶尔可能仍有轻微初始/拖动闪烁；该限制已被 White 接受。不得声称该闪烁已完全消除。
 
 **不应回退的边界**：不得添加第二解析器。不得全局去重歌词。不得让普通播放/歌词更新重置桌面歌词位置。不得移除拖拽结束最终位置 flush。不得恢复 hide/show 作为主窗口移动缓解。不得恢复垂直 rolling、snapshot、clone、shell、FLIP 或纵向 viewport animation。不得在此分支添加工具栏或性能优化。
+
+---
+
+### 2026-06-25：Stage 4.3 桌面歌词解锁工具栏
+
+**分支**：`feature/desktop-lyrics-toolbar`
+
+**功能**：解锁状态下显示的紧凑桌面歌词工具栏。默认隐藏；鼠标进入桌面歌词交互区域时显示；鼠标离开后延迟隐藏；锁定状态下完全隐藏。工具栏包含上一首、播放/暂停、下一首、单/双行切换、左/中/右对齐、桌面歌词字号滑杆、恢复默认、锁定和关闭。
+
+**状态归属**：主渲染器仍是权威来源。`desktopLyricsLineMode`、`desktopLyricsAlignment`、`desktopLyricsSize` 继续存储在现有 `mineradio-lyric-layout-v1` 中。桌面歌词 overlay 不写 localStorage，不维护独立工具栏状态。工具栏状态由主渲染器推送的桌面歌词 payload 回填。
+
+**IPC 与播放路径**：固定工具栏命令通过 `desktopOverlay.runLyricsToolbarCommand(command)` 进入 `mineradio-desktop-lyrics-toolbar-command`，主进程校验 sender 是当前桌面歌词窗口、命令是字符串且存在于 allowlist，再转发语义动作到主渲染器。播放控制复用现有语义播放路径，不模拟主界面按钮。字号滑杆使用独立窄 IPC `mineradio-desktop-lyrics-toolbar-font-size`，主进程校验 sender、有限数字、`0.72` 到 `1.55` 范围和 `0.01` 步进后再发送给主渲染器。
+
+**字号滑杆**：替代字体缩小/放大按钮。使用现有 `desktopLyricsSize` 模型，范围 `0.72` 到 `1.55`，步进 `0.01`，显示为 `Math.round(size * 100) + '%'`。拖动时本地预览并重新计算歌词 fit 与长歌词横向滚动；最终值通过主渲染器现有保存和桌面歌词状态更新路径持久化。
+
+**恢复默认**：只重置当前工具栏直接控制的三项：`desktopLyricsLineMode = single`、`desktopLyricsAlignment = center`、`desktopLyricsSize = 1`（显示 `100%`）。不会重置桌面歌词启用状态、锁定/穿透状态、X/Y 位置、显示器 ID、BrowserWindow bounds、透明度、颜色、字体族、字重、行高、字距、glow、highlight、播放状态、当前歌曲、壁纸状态或任何无关视觉设置。
+
+**交互边界**：工具栏按钮、字号滑杆和恢复默认按钮均排除在桌面歌词窗口拖拽启动之外，并保持 `-webkit-app-region: no-drag`。工具栏可见时纳入桌面歌词交互 hot bounds。滑杆拖动期间不会触发延迟隐藏，也不会触发窗口移动。
+
+**视觉与文案**：工具栏为紧凑图标按钮设计，沿用当前桌面歌词的半透明发光视觉语言。所有 toolbar hover 和 accessibility 标签均为中文。无 emoji，无宽文字按钮，无额外常驻面板。
+
+**White 已验证**：紧凑工具栏、hover 显示与延迟隐藏、锁定时隐藏、播放控制、行模式、对齐、字号滑杆、恢复默认、锁定、关闭、拖拽排除、hot bounds、主渲染器状态同步和现有持久化路径均已通过手动验收。
+
+**未改变/未验证**：Stage 4.1 静态双行行为仍是权威行为；未恢复垂直 two-line rolling、snapshot、clone、shell、FLIP 或纵向 viewport animation。Stage 4.1 已接受的主窗口移动时轻微初始/拖动闪烁限制未改变。Stage 4.6 多显示器测试因 White 当前只有一个显示器而跳过，不能标记为通过。Stage 4.2 逐字高亮是下一开发阶段；Stage 4.2 之后再进行独立的后台与桌面歌词功耗优化工作。
+
+**不应回退的边界**：不得为工具栏创建第二套状态或存储；不得让 overlay 直接写持久化；不得用模拟按钮点击代替语义播放路径；不得让工具栏控件触发窗口拖拽；不得让恢复默认重置位置、锁定、启用、颜色、透明度、播放或 BrowserWindow bounds；不得恢复垂直 rolling；不得引入新依赖、品牌、安装器或更新器变更。
