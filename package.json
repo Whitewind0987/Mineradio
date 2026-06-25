@@ -71,6 +71,7 @@
   },
   "mineradio": {
     "update": {
+      "enabled": false,
       "provider": "github",
       "owner": "XxHuberrr",
       "repo": "Mineradio",

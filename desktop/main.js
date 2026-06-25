@@ -4,6 +4,23 @@ const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
 
+// ============================================================================
+// Fork private development — temporary user-data isolation
+// ============================================================================
+// These values are temporary technical identifiers, NOT the final product
+// name. They will be replaced during Stage 9 (final branding).
+// ============================================================================
+const FORK_PRIVATE_DEVELOPMENT = true;
+const FORK_USER_DATA_DIR_NAME = 'MineradioForkDev';
+
+if (FORK_PRIVATE_DEVELOPMENT) {
+  const forkUserDataPath = path.join(app.getPath('appData'), FORK_USER_DATA_DIR_NAME);
+  fs.mkdirSync(forkUserDataPath, { recursive: true });
+  app.setPath('userData', forkUserDataPath);
+  app.setPath('sessionData', forkUserDataPath);
+}
+// ============================================================================
+
 let mainWindow = null;
 let localServer = null;
 let mainServerPort = 0;
@@ -274,6 +291,7 @@ function getUpdateDownloadDir() {
 
 function shouldEnsureDesktopShortcut() {
   if (process.platform !== 'win32') return false;
+  if (FORK_PRIVATE_DEVELOPMENT) return false;
   if (process.env.MINERADIO_NO_DESKTOP_SHORTCUT === '1') return false;
   return app.isPackaged || process.env.MINERADIO_CREATE_DESKTOP_SHORTCUT === '1';
 }
@@ -1328,6 +1346,7 @@ async function createWindow() {
   process.env.COOKIE_FILE = path.join(app.getPath('userData'), '.cookie');
   process.env.QQ_COOKIE_FILE = path.join(app.getPath('userData'), '.qq-cookie');
   process.env.MINERADIO_UPDATE_DIR = getUpdateDownloadDir();
+  process.env.MINERADIO_BEAT_CACHE_DIR = path.join(app.getPath('userData'), 'beatmaps');
   try {
     const legacyQQCookie = path.join(__dirname, '..', '.qq-cookie');
     if (fs.existsSync(legacyQQCookie)) {

@@ -86,3 +86,48 @@ npm start
 - `package.json` 和 `package-lock.json` 保持锁定版本
 - 所有语法检查通过
 - Unpacked 构建可以成功完成
+
+---
+
+## 技术隔离记录
+
+### 2026-06-25：Stage 0.2 技术环境、用户数据与更新源隔离
+
+**分支**：`feature/fork-technical-isolation`
+
+**临时技术标识**：`MineradioForkDev`（非最终产品名，将在 Stage 9 替换）
+
+**userData / sessionData 隔离**：
+
+- 在 Chromium 开关和单实例锁之前配置
+- 路径：`%APPDATA%\MineradioForkDev\`
+- 通过 `app.setPath('userData', ...)` 和 `app.setPath('sessionData', ...)` 实现
+- `.cookie`、`.qq-cookie`、`updates`、`beatmaps` 全部解析到 fork 用户数据目录内
+- 不上游 Cookie、设置、localStorage 或缓存迁移
+- 可见名称、Logo、图标、appId、AppUserModelId、可执行文件名、登录分区名保持不变
+
+**更新显式禁用**：
+
+- `package.json`：`mineradio.update.enabled: false`
+- 环境变量覆盖：`MINERADIO_UPDATE_DISABLED=1`
+- 禁用时 `configured: false`，无上游 GitHub 请求
+- 更新 UI 仅当 `configured === true && updateAvailable === true` 时可见
+- `preview` 单独永远不表示存在新版本
+- 更新检查失败与"已禁用更新"在 UI 中区分显示
+
+**桌面快捷方式**：私有开发期间自动创建已禁用（`FORK_PRIVATE_DEVELOPMENT = true`）
+
+**节拍缓存**：重定向到 `%APPDATA%\MineradioForkDev\beatmaps`（不再使用 `D:\MineradioCache\beatmaps`）
+
+**已修改文件**：`desktop/main.js`、`server.js`、`package.json`、`public/index.html`
+
+**未修改**：`package-lock.json`
+
+**已验证**：开发启动、unpacked 构建和启动、更新 API 端点、Cookie 隔离、快捷方式跳过
+
+**不应回退的边界**：
+
+- 不得将 `MineradioForkDev` 视为公开品牌
+- 在 fork 拥有有效的自有发布源之前不得重新启用更新
+- 不得自动迁移上游账户数据
+- 不得将 `preview` 恢复为更新可用性条件

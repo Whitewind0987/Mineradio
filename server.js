@@ -233,12 +233,19 @@ function readUpdateConfig(pkg) {
   const parsed = parseGitHubRepository(repoHint) || {};
   const owner = process.env.MINERADIO_UPDATE_OWNER || local.owner || parsed.owner || '';
   const repo = process.env.MINERADIO_UPDATE_REPO || local.repo || parsed.repo || '';
+
+  const disabledByEnvironment =
+    String(process.env.MINERADIO_UPDATE_DISABLED || '').trim() === '1';
+  const enabled =
+    local.enabled !== false && !disabledByEnvironment;
+
   return {
     provider: local.provider || 'github',
     owner,
     repo,
-    configured: !!(owner && repo),
-    preview: local.preview !== false,
+    enabled,
+    configured: enabled && !!(owner && repo),
+    preview: enabled && local.preview !== false,
     preferMirrors: local.preferMirrors !== false,
     mirrors: readUpdateMirrors(local),
     manifest: process.env.MINERADIO_UPDATE_MANIFEST
@@ -573,6 +580,7 @@ function localUpdateFallback(reason, opts) {
   opts = opts || {};
   const configured = !!(opts.configured != null ? opts.configured : false);
   return {
+    enabled: UPDATE_CONFIG.enabled,
     configured,
     preview: UPDATE_CONFIG.preview,
     updateAvailable: false,
@@ -3251,6 +3259,7 @@ const server = http.createServer(async (req, res) => {
       version: APP_VERSION,
       update: {
         provider: UPDATE_CONFIG.provider,
+        enabled: UPDATE_CONFIG.enabled,
         configured: UPDATE_CONFIG.configured,
         owner: UPDATE_CONFIG.owner,
         repo: UPDATE_CONFIG.repo,
