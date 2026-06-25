@@ -219,3 +219,36 @@ npm start
 - 不得创建另一个播放命令分发器、主进程媒体键快捷键或权威托盘状态副本
 - 不得在中心暂停路径外重复暂停通知
 - 不得用可见性切换替代 `focusMainWindow()`
+
+---
+
+### 2026-06-25：Stage 2.2 可配置关闭行为
+
+**分支**：`feature/close-behavior`
+
+**模式**：`ask`（每次询问）、`tray`（最小化到托盘）、`exit`（直接退出）。默认 `exit`。存储键 `mineradio-close-behavior-v1`。渲染器 localStorage 持久化，主进程仅保留清理后的运行时缓存。更改即时生效。
+
+**IPC**：渲染器→主进程通道 `mineradio-close-behavior-set`，预加载方法 `setCloseBehavior`。无新依赖，无原始 `ipcRenderer`，浏览器模式安全。
+
+**生命周期**：
+- `exit`：保留普通关闭——`window-all-closed` 未修改
+- `tray`：`event.preventDefault()` → `mainWindow.hide()`。播放/服务器/托盘继续。恢复复用 `focusMainWindow()`、托盘左键单击和二次启动
+- `ask`：显示 Electron 对话框——最小化到托盘（默认）、退出、取消。重入保护，延迟完成守卫，错误恢复
+- 托盘退出绕过：调用 `app.quit()` → `before-quit` 设置 `isAppQuitting` → 关闭事件无拦截通过
+- Windows `query-session-end`：标记退出中，不调用 `preventDefault()`
+- 全屏在隐藏时保留，恢复时正确还原
+
+**UI**：使用现有 `.fx-seg` 三段式视觉风格的三段选择器。原生单选框保留（视觉隐藏），共享 `name="closeBehavior"`，键盘导航正常，焦点可见。关闭行为包装器使用与 `.fx-slider` 控件相同的 `padding:9px 10px` 水平内缩及 12px 底部间距。过时的选择器 margin 变通方案已移除，其他分段控件未被修改。
+
+**用户已验证**：三种关闭模式均正确工作；播放在隐藏时继续；托盘恢复和退出正确；询问对话框三个按钮均正确；重复关闭不产生多个对话框；偏好重启后保留；Alt+F4 行为正确；全屏隐藏和恢复正确；Stage 1 Media Session 和 Stage 2.1 托盘控件正常；全局快捷键正常；隐藏后桌面歌词保留；搜索、播放和设置正常；无更新提示；最终分段选择器间距和对齐正确。
+
+**显式未验证**：Windows 关机/重启/注销行为未经手动测试；物理耳机和锁屏行为未测试。
+
+**不应回退的边界**：
+- 不得将 `app.quit()` 从 `window-all-closed` 中移除
+- 不得拦截应用级退出
+- 不得在隐藏前强制退出全屏
+- 不得暴露通用 IPC
+- 不得将主进程作为持久化偏好权威
+- 不得更改 Stage 1 Media Session 或 Stage 2.1 托盘播放行为
+- 不得为修复关闭行为选择器间距而更改无关的 `.fx-seg` 布局

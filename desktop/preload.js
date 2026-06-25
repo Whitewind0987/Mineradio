@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   exportJsonFile: (payload) => ipcRenderer.invoke('mineradio-export-json-file', payload || {}),
   importJsonFile: () => ipcRenderer.invoke('mineradio-import-json-file'),
   updateTrayPlaybackState: (snapshot) => ipcRenderer.invoke('mineradio-tray-update-playback', snapshot || {}),
+  setCloseBehavior: (value) => ipcRenderer.invoke('mineradio-close-behavior-set', value),
   onGlobalHotkey: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload || {});

@@ -492,6 +492,7 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 .update-primary-btn{position:relative;height:44px;border-radius:13px;border:1px solid rgba(244,210,138,.34);background:rgba(244,210,138,.105);color:rgba(255,244,214,.96);font-family:inherit;font-size:13px;font-weight:760;letter-spacing:.2px;cursor:pointer;overflow:hidden;box-shadow:0 14px 36px rgba(0,0,0,.28),0 0 22px rgba(244,210,138,.060),inset 0 1px 0 rgba(255,255,255,.10);transition:background .22s,border-color .22s,transform .22s,color .22s,box-shadow .22s}
 .update-primary-btn:hover{border-color:rgba(244,210,138,.58);background:rgba(244,210,138,.15);box-shadow:0 16px 42px rgba(0,0,0,.30),0 0 28px rgba(244,210,138,.11),inset 0 1px 0 rgba(255,255,255,.12);transform:translateY(-1px)}
 .update-primary-btn:disabled{cursor:default;transform:none;color:rgba(255,255,255,.64);border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.045)}
+.fx-seg-radio{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);border:0;white-space:nowrap}.fx-seg-radio:focus-visible+span{outline:2px solid rgba(0,245,212,.5);outline-offset:-2px;border-radius:2px}
 .update-btn-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,rgba(244,210,138,.30),rgba(255,239,193,.18));opacity:.95;transition:width .22s ease;pointer-events:none}
 .update-btn-label{position:relative;z-index:1}
 .update-secondary-btn{height:44px;padding:0;border-radius:13px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.035);color:rgba(255,255,255,.55);font-family:inherit;font-size:12px;cursor:pointer;transition:background .18s,border-color .18s,color .18s,transform .18s}
@@ -1192,10 +1193,10 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode{left:50%;width:min(1080px,cal
 
 /* --- 三态分段 --- */
 .fx-seg{display:flex;border-radius:11px;border:1px solid rgba(255,255,255,.08);overflow:hidden;background:rgba(255,255,255,.026);margin-bottom:10px}
-.fx-seg button{flex:1;padding:8px 4px;background:none;border:none;color:rgba(255,255,255,.55);cursor:pointer;font-size:11.5px;font-family:inherit;transition:all .2s;letter-spacing:.4px;border-right:1px solid rgba(255,255,255,.05)}
-.fx-seg button:last-child{border-right:none}
-.fx-seg button:hover{background:rgba(255,255,255,.05);color:#fff}
-.fx-seg button.active{background:rgba(0,245,212,.10);color:var(--fc-accent)}
+.fx-seg button,.fx-seg label{flex:1;padding:8px 4px;background:none;border:none;color:rgba(255,255,255,.55);cursor:pointer;font-size:11.5px;font-family:inherit;transition:all .2s;letter-spacing:.4px;border-right:1px solid rgba(255,255,255,.05);text-align:center;display:flex;align-items:center;justify-content:center}
+.fx-seg button:last-child,.fx-seg label:last-child{border-right:none}
+.fx-seg button:hover,.fx-seg label:hover{background:rgba(255,255,255,.05);color:#fff}
+.fx-seg button.active,.fx-seg label.active{background:rgba(0,245,212,.10);color:var(--fc-accent)}
 
 /* --- 高级折叠 --- */
 .fx-advanced{margin-top:16px;border:1px solid rgba(255,255,255,.055);border-radius:13px;padding:10px 12px;background:rgba(255,255,255,.022)}
@@ -2174,6 +2175,15 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
       </div>
       <div class="fx-slider dev-locked"><label>壁纸透明度</label><input id="fx-wallpaperopacity" type="range" min="0.35" max="1" step="0.01" disabled><output></output></div>
     </div>
+    <div style="padding:9px 10px 12px 10px">
+      <div class="fx-section-label">关闭行为</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.46);margin-bottom:8px;line-height:1.4">点击关闭按钮、按 Alt+F4 或从任务栏关闭窗口时的行为</div>
+      <div class="fx-seg" id="close-behavior-seg">
+        <label id="close-behavior-label-ask"><input type="radio" name="closeBehavior" value="ask" id="close-behavior-ask" class="fx-seg-radio" onchange="setCloseBehaviorPreference('ask')"><span>每次询问</span></label>
+        <label id="close-behavior-label-tray"><input type="radio" name="closeBehavior" value="tray" id="close-behavior-tray" class="fx-seg-radio" onchange="setCloseBehaviorPreference('tray')"><span>最小化到托盘</span></label>
+        <label id="close-behavior-label-exit"><input type="radio" name="closeBehavior" value="exit" id="close-behavior-exit" class="fx-seg-radio" onchange="setCloseBehaviorPreference('exit')"><span>直接退出</span></label>
+      </div>
+    </div>
   </div>
 
   <div class="fx-fold" id="fx-stage-fold">
@@ -2724,6 +2734,7 @@ var USER_CAPSULE_AUTO_HIDE_STORE_KEY = 'mineradio-user-capsule-auto-hide-v1';
 var FX_FAB_AUTO_HIDE_STORE_KEY = 'mineradio-fx-fab-auto-hide-v1';
 var CONTROLS_AUTO_HIDE_STORE_KEY = 'mineradio-controls-auto-hide-v1';
 var FREE_CAMERA_STORE_KEY = 'mineradio-free-camera-v1';
+var CLOSE_BEHAVIOR_STORAGE_KEY = 'mineradio-close-behavior-v1';
 var HOTKEY_SETTINGS_STORE_KEY = 'mineradio-hotkey-settings-v1';
 var VISUAL_GUIDE_SEEN_STORE_KEY = 'mineradio-visual-guide-seen-v2';
 var LOCAL_BEATMAP_STORE_KEY = 'mineradio-local-beatmaps-v1';
@@ -18834,6 +18845,36 @@ function clearMediaSession() {
   mediaSessionInitialized = false;
 }
 
+function normalizeCloseBehaviorValue(value) {
+  if (value === 'ask' || value === 'tray' || value === 'exit') return value;
+  return 'exit';
+}
+function readCloseBehavior() {
+  try { return normalizeCloseBehaviorValue(localStorage.getItem(CLOSE_BEHAVIOR_STORAGE_KEY)); } catch (e) { return 'exit'; }
+}
+function saveCloseBehavior(value) {
+  try { localStorage.setItem(CLOSE_BEHAVIOR_STORAGE_KEY, value); } catch (e) {}
+}
+function syncCloseBehaviorToDesktop(value) {
+  if (!(window.desktopWindow && typeof window.desktopWindow.setCloseBehavior === 'function')) return;
+  try { window.desktopWindow.setCloseBehavior(value).catch(function () {}); } catch (e) {}
+}
+function applyCloseBehaviorUI() {
+  var value = readCloseBehavior();
+  var el = document.getElementById('close-behavior-' + value);
+  if (el) el.checked = true;
+  ['ask', 'tray', 'exit'].forEach(function (v) {
+    var label = document.getElementById('close-behavior-label-' + v);
+    if (label) label.classList.toggle('active', v === value);
+  });
+}
+function setCloseBehaviorPreference(value) {
+  var normalized = normalizeCloseBehaviorValue(value);
+  saveCloseBehavior(normalized);
+  applyCloseBehaviorUI();
+  syncCloseBehaviorToDesktop(normalized);
+}
+
 function notifyTrayPlaybackState() {
   if (!(window.desktopWindow && typeof window.desktopWindow.updateTrayPlaybackState === 'function')) return;
   var song = currentIdx >= 0 && currentIdx < playQueue.length ? playQueue[currentIdx] : null;
@@ -26758,6 +26799,8 @@ updateCustomLyricControls();
 updateLikeButtons();
 setupMediaSession();
 notifyTrayPlaybackState();
+applyCloseBehaviorUI();
+syncCloseBehaviorToDesktop(readCloseBehavior());
 setTimeout(initUpdatePreview, 9000);
 
 // ============================================================

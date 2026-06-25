@@ -293,6 +293,15 @@ function getUpdateDownloadDir() {
 // ======================================================================
 //  Windows system tray — read-only display cache
 // ======================================================================
+let closeBehavior = 'exit';
+let isAppQuitting = false;
+let closePromptPending = false;
+
+function normalizeCloseBehavior(value) {
+  if (value === 'ask' || value === 'tray' || value === 'exit') return value;
+  return 'exit';
+}
+
 let tray = null;
 let trayPlaybackSnapshot = {
   title: '',
@@ -1249,6 +1258,15 @@ ipcMain.handle('desktop-window-close', (event) => {
   getSenderWindow(event)?.close();
 });
 
+ipcMain.handle('mineradio-close-behavior-set', (_event, value) => {
+  var normalized = normalizeCloseBehavior(value);
+  closeBehavior = normalized;
+  return {
+    ok: value === normalized,
+    value: normalized,
+  };
+});
+
 ipcMain.handle('mineradio-tray-update-playback', (_event, payload) => {
   try {
     var snap = sanitizeTraySnapshot(payload);
@@ -1541,7 +1559,55 @@ async function createWindow() {
   mainWindow.on('blur', () => sendWindowState(mainWindow));
   mainWindow.on('move', () => scheduleWindowStateSend(mainWindow));
   mainWindow.on('resize', () => scheduleWindowStateSend(mainWindow));
+
+  mainWindow.on('query-session-end', () => {
+    isAppQuitting = true;
+    closePromptPending = false;
+  });
+
+  mainWindow.on('close', (event) => {
+    if (isAppQuitting) return;
+    if (closeBehavior === 'exit') return;
+    event.preventDefault();
+    if (closeBehavior === 'tray') {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.hide();
+      return;
+    }
+    // closeBehavior === 'ask'
+    if (closePromptPending) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    closePromptPending = true;
+    var wnd = mainWindow;
+    dialog.showMessageBox(wnd, {
+      type: 'question',
+      title: APP_NAME,
+      message: '关闭窗口',
+      detail: '请选择关闭窗口后的行为。',
+      buttons: ['最小化到托盘', '退出', '取消'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    }).then(function (result) {
+      closePromptPending = false;
+      if (isAppQuitting) return;
+      if (result.response === 0) {
+        if (!wnd || wnd.isDestroyed()) return;
+        wnd.hide();
+      } else if (result.response === 1) {
+        app.quit();
+      }
+      // response 2 (cancel) or undefined: do nothing
+    }).catch(function (e) {
+      closePromptPending = false;
+      if (isAppQuitting) return;
+      console.warn('[CloseDialog]', e && e.message);
+      if (wnd && !wnd.isDestroyed()) focusMainWindow();
+    });
+  });
+
   mainWindow.on('closed', () => {
+    closePromptPending = false;
     if (mainWindowStateTimer) {
       clearTimeout(mainWindowStateTimer);
       mainWindowStateTimer = null;
@@ -1603,6 +1669,8 @@ if (!gotSingleInstanceLock) {
   });
 
   app.on('before-quit', () => {
+    isAppQuitting = true;
+    closePromptPending = false;
     destroyTray();
     unregisterMineradioGlobalHotkeys();
     closeOverlayWindows();
