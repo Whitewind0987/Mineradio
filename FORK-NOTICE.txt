@@ -1,0 +1,32 @@
+﻿Mineradio W
+
+这是由 Whitewind0987 维护的 Mineradio 非官方修改版。
+本版本不是 XxHuberrr 发布的官方版本。
+
+修改版源码：
+https://github.com/Whitewind0987/Mineradio
+
+原项目源码：
+https://github.com/XxHuberrr/Mineradio
+
+开源许可证：
+GNU General Public License v3.0（GPL-3.0）
+
+本版本目前主要新增：
+- Windows 系统媒体控制
+- Windows 系统托盘控制
+- 可配置的关闭行为
+- Windows 开机启动设置
+- 播放队列、当前歌曲和播放位置恢复
+- 增强的桌面歌词单双行、对齐、拖动和位置保存
+- 桌面歌词悬停工具栏
+- 网易云 YRC 与受支持的 QQ QRC 真实逐字高亮
+
+这是个人 Fork 测试版本。
+使用本版本时遇到的问题，请反馈给 Whitewind0987，
+不要将本修改版的问题归因于原项目作者。
+
+本项目不会提供绕过会员、付费、版权、地区限制、
+音质权限或 DRM 保护的功能。
+使用第三方音乐平台相关功能时，请遵守对应平台的
+用户协议、版权规则和会员权益规则。

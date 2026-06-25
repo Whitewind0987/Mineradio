@@ -1,9 +1,9 @@
 {
-  "name": "mineradio",
-  "productName": "Mineradio",
-  "version": "1.1.0",
-  "description": "沉浸式音乐播放器，融合天气电台、歌词舞台、粒子视觉和 3D 歌单架。",
-  "author": "Mineradio",
+  "name": "mineradio-w",
+  "productName": "Mineradio W",
+  "version": "1.1.0-w1",
+  "description": "Unofficial Mineradio fork by White with enhanced Windows integration and desktop lyrics.",
+  "author": "Whitewind0987",
   "main": "desktop/main.js",
   "private": true,
   "scripts": {
@@ -12,8 +12,8 @@
     "build:win:dir": "electron-builder --win dir"
   },
   "build": {
-    "appId": "com.mineradio.desktop",
-    "productName": "Mineradio",
+    "appId": "com.whitewind0987.mineradio.w",
+    "productName": "Mineradio W",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -30,11 +30,13 @@
       "dj-analyzer.js",
       "package.json",
       "!public/index.*.html",
-      "public/index.html"
+      "public/index.html",
+      "LICENSE",
+      "FORK-NOTICE.txt"
     ],
     "asar": false,
     "win": {
-      "executableName": "Mineradio",
+      "executableName": "Mineradio-W",
       "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
@@ -52,19 +54,20 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Mineradio",
+      "shortcutName": "Mineradio W",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerSidebar": "build/installerSidebar.bmp",
       "uninstallerSidebar": "build/installerSidebar.bmp",
       "installerHeader": "build/installerHeader.bmp",
       "include": "build/installer.nsh",
-      "artifactName": "Mineradio-${version}-Setup.${ext}"
+      "artifactName": "Mineradio-W-${version}-Setup.${ext}",
+      "uninstallDisplayName": "Mineradio W"
     },
     "publish": [
       {
         "provider": "github",
-        "owner": "XxHuberrr",
+        "owner": "Whitewind0987",
         "repo": "Mineradio"
       }
     ]
@@ -73,7 +76,7 @@
     "update": {
       "enabled": false,
       "provider": "github",
-      "owner": "XxHuberrr",
+      "owner": "Whitewind0987",
       "repo": "Mineradio",
       "preview": true,
       "preferMirrors": true,
