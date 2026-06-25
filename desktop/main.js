@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, screen, session, globalShortcut, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen, session, globalShortcut, dialog, Tray, Menu } = require('electron');
 const net = require('net');
 const path = require('path');
 const fs = require('fs');
@@ -289,6 +289,115 @@ function focusMainWindow() {
 function getUpdateDownloadDir() {
   return path.join(app.getPath('userData'), 'updates');
 }
+
+// ======================================================================
+//  Windows system tray — read-only display cache
+// ======================================================================
+let tray = null;
+let trayPlaybackSnapshot = {
+  title: '',
+  artist: '',
+  playing: false,
+  hasTrack: false,
+};
+
+function sanitizeTraySnapshot(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  var hasTrack = !!payload.hasTrack;
+  return {
+    title: normalizeTrayLabel(String(payload.title || '').trim()),
+    artist: normalizeTrayLabel(String(payload.artist || '').trim()),
+    playing: hasTrack && !!payload.playing,
+    hasTrack: hasTrack,
+  };
+}
+
+function normalizeTrayLabel(text) {
+  return String(text || '').slice(0, 120).trim();
+}
+
+function formatTrayTrackLabel(snapshot) {
+  if (!snapshot || !snapshot.hasTrack) return '当前没有播放歌曲';
+  var title = snapshot.title || '未知歌曲';
+  var artist = snapshot.artist;
+  var raw = artist ? (title + ' — ' + artist) : title;
+  var chars = Array.from(raw);
+  if (chars.length <= 60) return chars.join('');
+  return chars.slice(0, 59).join('') + '…';
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  var snap = trayPlaybackSnapshot;
+  var has = snap.hasTrack;
+  var template = [
+    { label: formatTrayTrackLabel(snap), enabled: false },
+    { type: 'separator' },
+    { label: snap.playing ? '暂停' : '播放', enabled: has, click: onTrayTogglePlay },
+    { label: '上一首', enabled: has, click: onTrayPrev },
+    { label: '下一首', enabled: has, click: onTrayNext },
+    { type: 'separator' },
+    { label: '显示主窗口', click: onTrayShowWindow },
+    { label: '退出', click: onTrayExit },
+  ];
+  try {
+    tray.setContextMenu(Menu.buildFromTemplate(template));
+  } catch (e) {
+    console.warn('[Tray] menu build failed:', e.message);
+  }
+}
+
+function onTrayTogglePlay() {
+  sendTrayPlaybackCommand('togglePlay');
+}
+function onTrayPrev() {
+  sendTrayPlaybackCommand('prevTrack');
+}
+function onTrayNext() {
+  sendTrayPlaybackCommand('nextTrack');
+}
+function onTrayShowWindow() {
+  focusMainWindow();
+}
+function onTrayExit() {
+  app.quit();
+}
+
+function sendTrayPlaybackCommand(action) {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) return;
+  try {
+    mainWindow.webContents.send('mineradio-global-hotkey', { action: action });
+  } catch (e) {
+    console.warn('[Tray] command failed:', action, e.message);
+  }
+}
+
+function createTray() {
+  if (process.platform !== 'win32') return;
+  if (tray) return;
+  if (!fs.existsSync(APP_ICON_ICO)) {
+    console.warn('[Tray] icon not found:', APP_ICON_ICO);
+    return;
+  }
+  try {
+    tray = new Tray(APP_ICON_ICO);
+    tray.setToolTip(APP_NAME);
+    tray.on('click', function () {
+      focusMainWindow();
+    });
+    updateTrayMenu();
+  } catch (e) {
+    console.warn('[Tray] creation failed:', e.message);
+    tray = null;
+  }
+}
+
+function destroyTray() {
+  if (!tray) { tray = null; return; }
+  try { tray.destroy(); } catch (e) {}
+  tray = null;
+}
+// ======================================================================
 
 function shouldEnsureDesktopShortcut() {
   if (process.platform !== 'win32') return false;
@@ -1140,6 +1249,18 @@ ipcMain.handle('desktop-window-close', (event) => {
   getSenderWindow(event)?.close();
 });
 
+ipcMain.handle('mineradio-tray-update-playback', (_event, payload) => {
+  try {
+    var snap = sanitizeTraySnapshot(payload);
+    if (!snap) return { ok: false, error: 'INVALID_TRAY_PAYLOAD' };
+    trayPlaybackSnapshot = snap;
+    updateTrayMenu();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || 'TRAY_UPDATE_FAILED' };
+  }
+});
+
 ipcMain.handle('mineradio-hotkeys-configure-global', (_event, bindings) => {
   return configureMineradioGlobalHotkeys(bindings);
 });
@@ -1469,6 +1590,7 @@ if (!gotSingleInstanceLock) {
     screen.on('display-added', () => scheduleWindowStateSend(mainWindow));
     screen.on('display-removed', () => scheduleWindowStateSend(mainWindow));
     await createWindow();
+    createTray();
   });
 
   app.on('activate', () => {
@@ -1481,6 +1603,7 @@ if (!gotSingleInstanceLock) {
   });
 
   app.on('before-quit', () => {
+    destroyTray();
     unregisterMineradioGlobalHotkeys();
     closeOverlayWindows();
     if (localServer && localServer.close) localServer.close();

@@ -17939,6 +17939,7 @@ function fadeOutAndPauseAudio() {
       }
       try { audio.pause(); } catch (pauseErr) { console.warn('[TogglePlayPause]', pauseErr); }
       setAudioOutputGainImmediate(0);
+      notifyTrayPlaybackState();
       resolve(true);
     }, AUDIO_FADE_OUT_MS + 80);
   });
@@ -18449,6 +18450,7 @@ async function playQueueAt(idx, opts) {
   });
   safePlaybackStep('media-session-meta', function(){
     updateMediaSessionMetadata(song, token);
+    notifyTrayPlaybackState();
   });
   safePlaybackStep('trial-banner-reset', function(){ document.getElementById('trial-banner').classList.remove('show'); });
   safePlaybackStep('show-loading', showLoading);
@@ -18621,6 +18623,7 @@ async function playQueueAt(idx, opts) {
     }
     showToast(playbackFailureToastText(err));
     clearMediaSessionTrackState(token);
+    notifyTrayPlaybackState();
   }
   } catch (setupErr) {
     console.error('Play setup failed:', { phase: playPhase, error: setupErr }, setupErr);
@@ -18632,6 +18635,7 @@ async function playQueueAt(idx, opts) {
     }
     showToast(playbackFailureToastText(setupErr));
     clearMediaSessionTrackState(token);
+    notifyTrayPlaybackState();
   }
 }
 async function attemptAudioPlay(opts) {
@@ -18652,6 +18656,7 @@ async function attemptAudioPlay(opts) {
       switchPlaybackVisualToEmily();
       playing = true; setPlayIcon(true);
       syncMediaSessionPlaybackState();
+      notifyTrayPlaybackState();
     if (opts.fade !== false) startPlaybackFadeIn();
     else restorePlaybackGain();
     forcePlaybackControlsInteractive();
@@ -18662,6 +18667,7 @@ async function attemptAudioPlay(opts) {
     restorePlaybackGain();
     playing = false; setPlayIcon(false);
     syncMediaSessionPlaybackState();
+    notifyTrayPlaybackState();
     hideLoading();
     forcePlaybackControlsInteractive();
     if (!opts.silent) showToast(opts.manual ? '播放启动失败, 请重新选择歌曲' : '播放被系统拦截, 请点击播放按钮');
@@ -18828,6 +18834,21 @@ function clearMediaSession() {
   mediaSessionInitialized = false;
 }
 
+function notifyTrayPlaybackState() {
+  if (!(window.desktopWindow && typeof window.desktopWindow.updateTrayPlaybackState === 'function')) return;
+  var song = currentIdx >= 0 && currentIdx < playQueue.length ? playQueue[currentIdx] : null;
+  var isPlaying = !!(song && playing && audio && audio.src && !audio.paused && !audio.ended);
+  var snapshot = {
+    title: song ? (song.name || '') : '',
+    artist: song ? (song.artist || '') : '',
+    hasTrack: !!song,
+    playing: isPlaying,
+  };
+  try {
+    window.desktopWindow.updateTrayPlaybackState(snapshot).catch(function () {});
+  } catch (e) {}
+}
+
 function setupMediaSession() {
   if (mediaSessionInitialized) return;
   if (!mediaSessionSupported()) return;
@@ -18899,6 +18920,7 @@ function shuffleQueue() {
 }
 function clearQueue() {
   playQueue = []; currentIdx = -1;
+  notifyTrayPlaybackState();
   safeRenderQueuePanel('clear-queue');
   safeShelfRebuild('clear-queue');
   updateCustomCoverButton();
@@ -18909,6 +18931,7 @@ function removeFromQueue(idx) {
   if (idx < 0 || idx >= playQueue.length) return;
   playQueue.splice(idx, 1);
   if (currentIdx >= playQueue.length) currentIdx = playQueue.length - 1;
+  notifyTrayPlaybackState();
   safeRenderQueuePanel('remove-queue-item');
   safeShelfRebuild('remove-queue-item');
   updateCustomCoverButton();
@@ -26734,6 +26757,7 @@ updateCustomCoverButton();
 updateCustomLyricControls();
 updateLikeButtons();
 setupMediaSession();
+notifyTrayPlaybackState();
 setTimeout(initUpdatePreview, 9000);
 
 // ============================================================
