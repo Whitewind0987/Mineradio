@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   importJsonFile: () => ipcRenderer.invoke('mineradio-import-json-file'),
   updateTrayPlaybackState: (snapshot) => ipcRenderer.invoke('mineradio-tray-update-playback', snapshot || {}),
   setCloseBehavior: (value) => ipcRenderer.invoke('mineradio-close-behavior-set', value),
+  getStartupLaunchState: () => ipcRenderer.invoke('mineradio-startup-launch-get'),
+  setStartupLaunchEnabled: (enabled) => ipcRenderer.invoke('mineradio-startup-launch-set', enabled),
   onGlobalHotkey: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload || {});

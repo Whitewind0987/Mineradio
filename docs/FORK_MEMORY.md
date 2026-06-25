@@ -252,3 +252,41 @@ npm start
 - 不得将主进程作为持久化偏好权威
 - 不得更改 Stage 1 Media Session 或 Stage 2.1 托盘播放行为
 - 不得为修复关闭行为选择器间距而更改无关的 `.fx-seg` 布局
+
+---
+
+### 2026-06-25：Stage 2.3 Windows 开机启动设置
+
+**分支**：`feature/windows-startup`
+
+**功能**：用户控制的 Windows 开机启动开关。默认关闭——不自动创建登录项。仅 Windows 打包版 (`app.isPackaged === true`) 支持。npm start 不可用且显示为禁用。
+
+**状态归属**：Windows 是唯一权威来源。`app.getLoginItemSettings()` 直接读取注册表状态。无 localStorage 键，无主进程缓存。外部任务管理器更改会通过以下方式刷新：
+- 设置面板打开时
+- 当设置面板保持打开且应用窗口重新获得焦点时
+
+刷新仅执行读取，不会在忙碌时运行，并使用单调递增令牌防止过期异步读取。
+
+**登录项身份标识**：临时名称 `MineradioForkDev`（从 `FORK_USER_DATA_DIR_NAME` 派生）。当前 `AppUserModelId`（`com.mineradio.desktop`）未被用作隐式启动条目名称。Stage 9 必须在选择最终品牌后替换或清理此临时身份标识。
+
+**查询**：通过精确匹配 `name === 'MineradioForkDev'`、当前 `process.execPath`、空 `args` 和 `launchItem.enabled` 来找到 fork 的启动条目。不依赖 `openAtLogin` 属性。过时的路径条目不会被误识为当前条目。
+
+**设置器**：仅接受真实布尔值。启用时包含 `enabled: true`。禁用时从设置对象中省略 `enabled` 属性。每次写入后重新查询真实状态并验证匹配。
+
+**IPC**：两个窄通道——`mineradio-startup-launch-get` 和 `mineradio-startup-launch-set`。预加载方法 `getStartupLaunchState()` 和 `setStartupLaunchEnabled(enabled)`。渲染器不能提供 `path`、`args`、`name` 或注册表值。无原始 `ipcRenderer`。
+
+**UI**：`.fx-toggle` 分段开关，`role="switch"`，支持 Enter + Space（防止默认行为）。状态区分初始加载、已启用、已禁用、不支持、读取失败和写入忙碌。读取失败不显示为不支持，且保留上次成功的启用值。
+
+**生命周期**：未更改 `window-all-closed`、`before-quit`、`app.quit()`、关闭行为、托盘、Media Session、全局快捷键、播放、桌面歌词或壁纸。无启动项在初始化、查询、面板打开、焦点刷新或退出时被写入。仅显式用户激活会写入启动状态。正常启动保持可见且非最小化。无自动播放。无命令行启动参数。
+
+**White 已验证**：UI 位置和外观接受。npm start 不可用。解包构建支持。鼠标和键盘（Enter/Space）交互正确。无重复写入。通过应用启用/禁用正确反映在任务管理器中。任务管理器显示 `MineradioForkDev` 条目。关闭/重新打开面板查询实时状态。在任务管理器中外部禁用后返回 Mineradio 会刷新状态。关闭行为、托盘、Media Session、全局快捷键正常。无更新提示。
+
+**显式未验证**：Windows 登出/登录后的实际自动启动。Windows 重启后的实际自动启动。已安装的 NSIS 构建行为。重新安装/升级后的登录项行为。卸载程序清理 `MineradioForkDev`。注册后移动/删除 win-unpacked 目录。不再存在的陈旧条目清理。最终品牌迁移。物理耳机按钮。Windows 锁屏行为。
+
+**不应回退的边界**：
+- 不得创建 localStorage 或主进程缓存
+- 不得将 `openAtLogin` 用作已启用状态
+- 不得在初始化时更改登录项状态；仅显式用户操作可写入
+- 不得在关闭面板时跳过焦点刷新
+- 不得移除过期异步读取保护
+- Stage 9 必须替换或清理临时的 `MineradioForkDev` 启动身份标识

@@ -413,28 +413,18 @@ feature/tray-close-behavior
 
 ------
 
-## Stage 2.3：开机启动
+## Stage 2.3：开机启动 ✅ 已完成
 
-### 功能
+**实际分支**：`feature/windows-startup`
 
-- 设置页开关；
-- 显示实际状态；
-- 支持关闭；
-- 失败时显示明确原因；
-- 可选择启动后隐藏到托盘。
+**已实现**：设置页开关，显示实际操作系统状态，支持关闭。使用 Electron `app.setLoginItemSettings` / `app.getLoginItemSettings`。默认关闭。仅 Windows 打包版支持。临时登录项名称为 `MineradioForkDev`。正常启动保持可见且非最小化。
 
-### 要求
-
-- 使用 Electron 正式 API；
-- 不创建额外计划任务；
-- 不运行不透明注册表脚本；
-- 不要求管理员权限；
-- 开机启动后默认不自动播放。
+**已排除（延期）**："可选择启动后隐藏到托盘"——Stage 2.3 范围明确不包括最小化/隐藏/静默启动。
 
 ### 分支
 
 ```text
-feature/startup-settings
+feature/windows-startup
 ```
 
 ------

@@ -2184,6 +2184,13 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
         <label id="close-behavior-label-exit"><input type="radio" name="closeBehavior" value="exit" id="close-behavior-exit" class="fx-seg-radio" onchange="setCloseBehaviorPreference('exit')"><span>直接退出</span></label>
       </div>
     </div>
+    <div style="padding:9px 10px 12px 10px">
+      <div class="fx-section-label">系统</div>
+      <div class="fx-toggle" id="t-startupLaunch" role="switch" tabindex="0" onclick="toggleStartupLaunch()" onkeydown="handleStartupLaunchKeydown(event)" aria-checked="false" aria-disabled="true" title="">
+        <span>开机自启动</span><span class="dot"></span>
+      </div>
+      <div id="startup-launch-hint" style="font-size:10.5px;color:rgba(255,255,255,.34);margin-top:4px;line-height:1.4"></div>
+    </div>
   </div>
 
   <div class="fx-fold" id="fx-stage-fold">
@@ -3710,6 +3717,12 @@ function installRenderPowerHooks() {
     updateRenderPowerClasses();
     applyRendererPowerMode();
     if (!isDeepBackgroundMode()) recoverVisualsAfterBackground('focus');
+    if (!startupLaunchBusy && startupLaunchSupported) {
+      var panel = document.getElementById('fx-panel');
+      if (panel && (panel.classList.contains('show') || panel.classList.contains('peek'))) {
+        refreshStartupLaunchState();
+      }
+    }
   });
   window.addEventListener('blur', function(){
     desktopRuntimeState.focused = false;
@@ -18868,6 +18881,101 @@ function applyCloseBehaviorUI() {
     if (label) label.classList.toggle('active', v === value);
   });
 }
+var startupLaunchLoaded = false;
+var startupLaunchSupported = false;
+var startupLaunchEnabled = false;
+var startupLaunchBusy = false;
+var startupLaunchError = false;
+var startupLaunchRefreshToken = 0;
+
+function applyStartupLaunchUI() {
+  var toggle = document.getElementById('t-startupLaunch');
+  var hint = document.getElementById('startup-launch-hint');
+  if (!toggle) return;
+  var interactive = startupLaunchLoaded && startupLaunchSupported && !startupLaunchBusy && !startupLaunchError;
+  toggle.classList.toggle('on', startupLaunchEnabled);
+  toggle.setAttribute('aria-checked', String(!!startupLaunchEnabled));
+  toggle.setAttribute('aria-disabled', String(!interactive));
+  toggle.style.pointerEvents = interactive ? '' : 'none';
+  toggle.style.opacity = startupLaunchBusy ? '0.55' : '';
+  if (hint) {
+    if (!startupLaunchLoaded) {
+      hint.textContent = '正在读取开机自启动设置';
+    } else if (startupLaunchError) {
+      hint.textContent = '无法读取开机自启动设置';
+    } else if (!startupLaunchSupported) {
+      hint.textContent = '仅 Windows 打包版可用';
+    } else {
+      hint.textContent = '';
+    }
+  }
+}
+
+function handleStartupLaunchKeydown(event) {
+  if (event.repeat) return;
+  if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    toggleStartupLaunch();
+  }
+}
+
+function refreshStartupLaunchState() {
+  var api = window.desktopWindow;
+  if (!api || typeof api.getStartupLaunchState !== 'function') {
+    startupLaunchLoaded = true;
+    startupLaunchSupported = false;
+    startupLaunchEnabled = false;
+    startupLaunchError = false;
+    applyStartupLaunchUI();
+    return;
+  }
+  var token = ++startupLaunchRefreshToken;
+  api.getStartupLaunchState().then(function (res) {
+    if (token !== startupLaunchRefreshToken) return;
+    res = res || {};
+    startupLaunchLoaded = true;
+    startupLaunchSupported = !!res.supported;
+    startupLaunchError = false;
+    if (res.ok !== false) {
+      startupLaunchEnabled = !!res.enabled;
+    }
+    applyStartupLaunchUI();
+  }).catch(function () {
+    if (token !== startupLaunchRefreshToken) return;
+    startupLaunchLoaded = true;
+    startupLaunchError = true;
+    applyStartupLaunchUI();
+  });
+}
+
+function toggleStartupLaunch() {
+  if (startupLaunchBusy || !startupLaunchSupported || startupLaunchError) return;
+  var api = window.desktopWindow;
+  if (!api || typeof api.setStartupLaunchEnabled !== 'function') return;
+  startupLaunchBusy = true;
+  startupLaunchError = false;
+  ++startupLaunchRefreshToken;
+  applyStartupLaunchUI();
+  var requested = !startupLaunchEnabled;
+  api.setStartupLaunchEnabled(requested).then(function (res) {
+    startupLaunchBusy = false;
+    res = res || {};
+    startupLaunchSupported = !!res.supported;
+    startupLaunchError = false;
+    if (res.ok !== false) {
+      startupLaunchEnabled = !!res.enabled;
+    }
+    applyStartupLaunchUI();
+    if (res.ok === false) {
+      showToast('无法修改开机自启动设置');
+    }
+  }).catch(function () {
+    startupLaunchBusy = false;
+    applyStartupLaunchUI();
+    showToast('无法修改开机自启动设置');
+  });
+}
+
 function setCloseBehaviorPreference(value) {
   var normalized = normalizeCloseBehaviorValue(value);
   saveCloseBehavior(normalized);
@@ -22672,6 +22780,7 @@ function toggleFxPanel(force) {
   }
   el.classList.remove('show', 'closing');
   setPeek(el, true, 'fx');
+  if (!currentlyOpen) refreshStartupLaunchState();
 }
 function resetFx() {
   var savedCam = fx.cam;
@@ -26801,6 +26910,7 @@ setupMediaSession();
 notifyTrayPlaybackState();
 applyCloseBehaviorUI();
 syncCloseBehaviorToDesktop(readCloseBehavior());
+refreshStartupLaunchState();
 setTimeout(initUpdatePreview, 9000);
 
 // ============================================================

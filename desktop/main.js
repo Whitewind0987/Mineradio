@@ -302,6 +302,82 @@ function normalizeCloseBehavior(value) {
   return 'exit';
 }
 
+// ======================================================================
+//  Windows startup-launch — temporary technical login-item identity
+// ======================================================================
+// The login-item name is deliberately isolated from APP_USER_MODEL_ID.
+// Stage 9 must replace or clean up this temporary identity.
+// ======================================================================
+const STARTUP_LOGIN_ITEM_NAME = FORK_USER_DATA_DIR_NAME;
+
+function isStartupLaunchSupported() {
+  return process.platform === 'win32' && app.isPackaged === true;
+}
+
+function getStartupLaunchState() {
+  if (!isStartupLaunchSupported()) {
+    return {
+      ok: true,
+      supported: false,
+      enabled: false,
+      reason: app.isPackaged ? 'UNSUPPORTED_PLATFORM' : 'UNPACKAGED',
+    };
+  }
+  try {
+    var settings = app.getLoginItemSettings({
+      path: process.execPath,
+      args: [],
+    });
+    var items = Array.isArray(settings.launchItems) ? settings.launchItems : [];
+    var execPath = process.execPath;
+    var matched = null;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.name !== STARTUP_LOGIN_ITEM_NAME) continue;
+      if (!Array.isArray(item.args) || item.args.length !== 0) continue;
+      var itemPath = String(item.path || '');
+      if (itemPath.toLowerCase() !== execPath.toLowerCase()) continue;
+      matched = item;
+      break;
+    }
+    return {
+      ok: true,
+      supported: true,
+      enabled: matched ? !!matched.enabled : false,
+    };
+  } catch (e) {
+    console.warn('[StartupLaunch] read failed:', e && e.message);
+    return { ok: false, supported: true, enabled: false, error: 'STARTUP_STATE_READ_FAILED' };
+  }
+}
+
+function setStartupLaunchEnabled(enabled) {
+  if (typeof enabled !== 'boolean') {
+    return { ok: false, supported: isStartupLaunchSupported(), enabled: false, error: 'INVALID_BOOLEAN' };
+  }
+  if (!isStartupLaunchSupported()) {
+    return { ok: true, supported: false, enabled: false, reason: app.isPackaged ? 'UNSUPPORTED_PLATFORM' : 'UNPACKAGED' };
+  }
+  try {
+    var settings = {
+      openAtLogin: enabled,
+      path: process.execPath,
+      args: [],
+      name: STARTUP_LOGIN_ITEM_NAME,
+    };
+    if (enabled) settings.enabled = true;
+    app.setLoginItemSettings(settings);
+  } catch (e) {
+    console.warn('[StartupLaunch] write failed:', e && e.message);
+    return { ok: false, supported: true, enabled: false, error: 'STARTUP_STATE_WRITE_FAILED' };
+  }
+  var queried = getStartupLaunchState();
+  if (queried.ok && queried.supported && queried.enabled !== enabled) {
+    return { ok: false, supported: true, enabled: queried.enabled, error: 'STARTUP_STATE_MISMATCH' };
+  }
+  return queried;
+}
+
 let tray = null;
 let trayPlaybackSnapshot = {
   title: '',
@@ -1265,6 +1341,14 @@ ipcMain.handle('mineradio-close-behavior-set', (_event, value) => {
     ok: value === normalized,
     value: normalized,
   };
+});
+
+ipcMain.handle('mineradio-startup-launch-get', () => {
+  return getStartupLaunchState();
+});
+
+ipcMain.handle('mineradio-startup-launch-set', (_event, value) => {
+  return setStartupLaunchEnabled(value);
 });
 
 ipcMain.handle('mineradio-tray-update-playback', (_event, payload) => {
