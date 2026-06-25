@@ -12,6 +12,7 @@ const { execFile, spawn } = require('child_process');
 // ============================================================================
 const FORK_PRIVATE_DEVELOPMENT = true;
 const FORK_USER_DATA_DIR_NAME = 'MineradioForkDev';
+const FORK_ALLOW_LEGACY_DATA_MIGRATION = false;
 
 if (FORK_PRIVATE_DEVELOPMENT) {
   const forkUserDataPath = path.join(app.getPath('appData'), FORK_USER_DATA_DIR_NAME);
@@ -1347,16 +1348,18 @@ async function createWindow() {
   process.env.QQ_COOKIE_FILE = path.join(app.getPath('userData'), '.qq-cookie');
   process.env.MINERADIO_UPDATE_DIR = getUpdateDownloadDir();
   process.env.MINERADIO_BEAT_CACHE_DIR = path.join(app.getPath('userData'), 'beatmaps');
-  try {
-    const legacyQQCookie = path.join(__dirname, '..', '.qq-cookie');
-    if (fs.existsSync(legacyQQCookie)) {
-      if (!fs.existsSync(process.env.QQ_COOKIE_FILE)) {
-        fs.copyFileSync(legacyQQCookie, process.env.QQ_COOKIE_FILE);
+  if (FORK_ALLOW_LEGACY_DATA_MIGRATION) {
+    try {
+      const legacyQQCookie = path.join(__dirname, '..', '.qq-cookie');
+      if (fs.existsSync(legacyQQCookie)) {
+        if (!fs.existsSync(process.env.QQ_COOKIE_FILE)) {
+          fs.copyFileSync(legacyQQCookie, process.env.QQ_COOKIE_FILE);
+        }
+        fs.unlinkSync(legacyQQCookie);
       }
-      fs.unlinkSync(legacyQQCookie);
+    } catch (e) {
+      console.warn('QQ cookie migration skipped:', e.message);
     }
-  } catch (e) {
-    console.warn('QQ cookie migration skipped:', e.message);
   }
 
   localServer = require(path.join(__dirname, '..', 'server.js'));

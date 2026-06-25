@@ -103,7 +103,9 @@ npm start
 - 路径：`%APPDATA%\MineradioForkDev\`
 - 通过 `app.setPath('userData', ...)` 和 `app.setPath('sessionData', ...)` 实现
 - `.cookie`、`.qq-cookie`、`updates`、`beatmaps` 全部解析到 fork 用户数据目录内
-- 不上游 Cookie、设置、localStorage 或缓存迁移
+- 不迁移上游 Cookie、设置、localStorage 或缓存
+- 仓库根目录下的旧 Cookie 文件不会被自动迁移
+- 迁移需要未来明确的、用户批准的任务
 - 可见名称、Logo、图标、appId、AppUserModelId、可执行文件名、登录分区名保持不变
 
 **更新显式禁用**：
