@@ -499,7 +499,11 @@ feature/session-restore
 
 ------
 
-## Stage 3.2：界面与视觉状态恢复
+## Stage 3.2：界面与视觉状态恢复 ✅ 已完成
+
+**实际分支**：`feature/ui-visual-state-restore`
+
+**已实现**：保留所有现有独立存储键——未添加新的 Stage 3.2 整体快照。`mineradio-lyric-layout-v1` 涵盖视觉预设、歌词设置、桌面歌词偏好、歌单架设置。简洁/DIY 模式在首次绘制前由 `mineradio-diy-player-mode-v1` 恢复。图形质量由 `mineradio-playback-quality-v1` 恢复。唯一的缺失行为是桌面歌词窗口在启动时未被创建——在启动序列中添加了一个 `applyDesktopLyricsState(true)` 调用来修复此问题。播放器控制台 FAB 自动隐藏已由 `mineradio-fx-fab-auto-hide-v1` 持久化；面板打开/关闭保持为临时状态。
 
 ### 保存内容
 
