@@ -347,3 +347,21 @@ npm start
 **显式未验证**：渲染器重新加载重复窗口行为。叠加层加载失败。Windows 登出/重启。已安装 NSIS。FAB 自动隐藏运行时测试。
 
 **不应回退的边界**：不得创建新的 Stage 3.2 快照。不得重复现有键所有权。不得持久化面板打开/关闭。不得将 `fxPanelPinned` 变成新功能。不得创建第二个桌面歌词窗口系统。不得更改 Stage 3.1 播放恢复。
+
+---
+
+### 2026-06-25：Stage 4.1 桌面歌词布局
+
+**分支**：`feature/desktop-lyrics-layout`
+
+**功能**：单行/双行布局、下一行过滤、左/中/右对齐、持久化偏好。复用现有架构——无 IPC 更改。
+
+**偏好**：`desktopLyricsLineMode`（`single`/`double`）和 `desktopLyricsAlignment`（`left`/`center`/`right`），存储在 `mineradio-lyric-layout-v1` 中。
+
+**下一行过滤**：`findNextDesktopLyricLine`——跳过空白行和立即重复行。无第二解析器。过滤后的行用于进度跨度。
+
+**UI bug**：修复了分段控件双重选择问题——互斥的 `classList.toggle`。
+
+**White 已验证**：双行/右对齐在重启后恢复。按钮选择互斥。叠加层匹配。
+
+**不应回退的边界**：不得添加第二解析器。不得全局去重歌词。不得在布局工作中更改穿透。

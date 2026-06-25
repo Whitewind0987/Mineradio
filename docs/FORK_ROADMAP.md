@@ -586,7 +586,13 @@ feature/ui-visual-state-restore
 
 ------
 
-## Stage 4.1：桌面歌词基础布局
+## Stage 4.1：桌面歌词基础布局 ✅ 已完成
+
+**实际分支**：`feature/desktop-lyrics-layout`
+
+**已实现**：单行/双行模式，当前行 + 有效下一行，空白和立即重复过滤，左/中/右对齐，偏好持久化于 `mineradio-lyric-layout-v1`。主窗口视觉控制台分段控件。无 IPC 更改。
+
+### 下一步：Stage 4.3 解锁工具栏（未开始）
 
 ### 模式
 
