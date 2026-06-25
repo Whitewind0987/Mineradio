@@ -19735,10 +19735,14 @@ async function fetchLyric(songOrId, token) {
     }
     var r = await apiJson(endpoint);
     if (token !== trackSwitchToken) return;
-    var nativeLines = parseYrcText(r.yrc || '');
+    var yrcLines = parseYrcText(r.yrc || '', 'yrc');
+    var qrcLines = parseQrcText(r.qrc || '');
     var lrcLines = parseLyricText(r.lyric || '');
-    var hasNativeKaraoke = nativeLines.some(function(line){ return line.words && line.words.length; });
-    var timingSource = hasNativeKaraoke ? 'yrc-word' : (nativeLines.length ? 'yrc-line' : (lrcLines.length ? 'lrc-line' : 'fallback'));
+    var yrcHasWords = yrcLines.some(function(line){ return line.words && line.words.length; });
+    var qrcHasWords = qrcLines.some(function(line){ return line.words && line.words.length; });
+    var nativeLines = yrcLines.length ? yrcLines : (qrcHasWords ? qrcLines : []);
+    var hasNativeKaraoke = yrcHasWords || (!yrcLines.length && qrcHasWords);
+    var timingSource = yrcHasWords ? 'yrc-word' : (yrcLines.length ? 'yrc-line' : (qrcHasWords ? 'qrc-word' : (lrcLines.length ? 'lrc-line' : 'fallback')));
     var lines = withLyricFallback(nativeLines.length ? nativeLines : lrcLines);
     if (lines.length && lines[0].fallback) timingSource = 'fallback';
     setOriginalLyricsState(lines, hasNativeKaraoke, timingSource);
@@ -19800,7 +19804,39 @@ function parseLyricText(text) {
   });
   return finalizeLyricLineDurations(lines);
 }
-function parseYrcText(text) {
+function normalizeLyricTimingCompare(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim();
+}
+function normalizeTimedLyricVisibleText(text) {
+  return String(text || '').replace(/\u00a0/g, ' ').replace(/\r/g, '').replace(/\n/g, ' ');
+}
+function parseNativeWordSegments(body, lineStartMs, lineDurMs) {
+  var words = [];
+  var fullText = '';
+  var maxSegments = 120;
+  var reg = /[\(<](\d+),(\d+),\d+[\)>]([^()<>]*)/g;
+  var wm;
+  while ((wm = reg.exec(body)) && words.length < maxSegments) {
+    var txt = normalizeTimedLyricVisibleText(wm[3] || '');
+    if (!txt.trim()) continue;
+    var rawStart = parseInt(wm[1], 10);
+    var rawDur = parseInt(wm[2], 10);
+    if (!isFinite(rawStart) || !isFinite(rawDur) || rawStart < 0 || rawDur <= 0) continue;
+    var absStartMs = rawStart >= lineStartMs - 500 ? rawStart : lineStartMs + rawStart;
+    if (lineDurMs > 0 && absStartMs > lineStartMs + lineDurMs + 800) continue;
+    var c0 = fullText.length;
+    fullText += txt;
+    words.push({
+      text: txt,
+      t: absStartMs / 1000,
+      d: Math.max(0.06, Math.min(30, rawDur / 1000)),
+      c0: c0,
+      c1: fullText.length
+    });
+  }
+  return { text: fullText, words: words };
+}
+function parseNativeTimedLyricText(text, sourceName, requireWords) {
   var lines = [];
   String(text || '').split(/\r?\n/).forEach(function(line){
     var m = line.match(/^\[(\d+),(\d+)\](.*)$/);
@@ -19808,32 +19844,34 @@ function parseYrcText(text) {
     var lineStartMs = parseInt(m[1], 10) || 0;
     var lineDurMs = parseInt(m[2], 10) || 0;
     var body = m[3] || '';
-    var words = [], fullText = '';
-    var reg = /\((\d+),(\d+),\d+\)([^()]*)/g, wm;
-    while ((wm = reg.exec(body))) {
-      var txt = (wm[3] || '').replace(/\s+/g, ' ');
-      if (!txt) continue;
-      var rawStart = parseInt(wm[1], 10) || 0;
-      var rawDur = parseInt(wm[2], 10) || 0;
-      var absStartMs = rawStart >= lineStartMs - 500 ? rawStart : lineStartMs + rawStart;
-      var c0 = fullText.length;
-      fullText += txt;
-      words.push({ text:txt, t:absStartMs / 1000, d:Math.max(0.06, rawDur / 1000), c0:c0, c1:fullText.length });
-    }
-    if (!fullText) fullText = body.replace(/\(\d+,\d+,\d+\)/g, '').replace(/\s+/g, ' ');
+    var parsed = parseNativeWordSegments(body, lineStartMs, lineDurMs);
+    var strippedText = normalizeTimedLyricVisibleText(body.replace(/[\(<]\d+,\d+,\d+[\)>]/g, ''));
+    var fullText = strippedText.trim() ? strippedText : parsed.text;
+    if (!fullText.trim()) return;
     var leading = (fullText.match(/^\s+/) || [''])[0].length;
-    fullText = fullText.replace(/\s+/g, ' ').trim();
+    fullText = normalizeTimedLyricVisibleText(fullText).trim();
     if (!fullText) return;
+    var words = parsed.words || [];
     if (words.length) {
       words.forEach(function(w){
         w.c0 = Math.max(0, Math.min(fullText.length, w.c0 - leading));
         w.c1 = Math.max(w.c0, Math.min(fullText.length, w.c1 - leading));
       });
       words = words.filter(function(w){ return w.c1 > w.c0; });
+      if (normalizeLyricTimingCompare(words.map(function(w){ return w.text; }).join('')) !== normalizeLyricTimingCompare(fullText)) {
+        words = [];
+      }
     }
-    lines.push({ t:lineStartMs / 1000, duration:lineDurMs / 1000, text:fullText, words:words, charCount:Math.max(1, fullText.length), source: words.length ? 'yrc-word' : 'yrc-line' });
+    if (requireWords && !words.length) return;
+    lines.push({ t:lineStartMs / 1000, duration:lineDurMs / 1000, text:fullText, words:words, charCount:Math.max(1, fullText.length), source: words.length ? sourceName + '-word' : sourceName + '-line', wordTimingSource: words.length ? sourceName : '' });
   });
   return finalizeLyricLineDurations(lines);
+}
+function parseYrcText(text) {
+  return parseNativeTimedLyricText(text, 'yrc', false);
+}
+function parseQrcText(text) {
+  return parseNativeTimedLyricText(text, 'qrc', true);
 }
 function renderLyrics() {
   // v8: 歌词渲染由 stageLyrics 在每帧 tickLyricsParticles 里推动
@@ -26910,11 +26948,46 @@ function findNextDesktopLyricLine(lines, currentIdx, currentText) {
   }
   return null;
 }
+function compactDesktopWordTiming(line, displayText) {
+  if (!line || !Array.isArray(line.words) || !line.words.length) return null;
+  var lineText = normalizeDesktopLyricText(displayText || line.text || '');
+  if (!lineText) return null;
+  var words = [];
+  for (var i = 0; i < line.words.length && words.length < 120; i++) {
+    var w = line.words[i] || {};
+    var text = String(w.text || '');
+    var t = Number(w.t);
+    var d = Number(w.d);
+    if (!text || !isFinite(t) || !isFinite(d) || d <= 0) continue;
+    words.push({
+      text: text,
+      t: Math.max(0, Math.round(t * 1000) / 1000),
+      d: Math.max(0.06, Math.min(30, Math.round(d * 1000) / 1000))
+    });
+  }
+  if (!words.length) return null;
+  if (normalizeDesktopLyricText(words.map(function(w){ return w.text; }).join('')) !== lineText) return null;
+  var start = isFinite(line.t) ? Math.max(0, Number(line.t)) : words[0].t;
+  var duration = isFinite(line.duration) && line.duration > 0 ? Number(line.duration) : 0;
+  if (!duration && words.length) {
+    var last = words[words.length - 1];
+    duration = Math.max(0.75, last.t + last.d - start);
+  }
+  var source = line.wordTimingSource || (line.source === 'qrc-word' ? 'qrc' : (line.source === 'yrc-word' ? 'yrc' : 'native'));
+  var key = source + '|' + Math.round(start * 1000) + '|' + Math.round(duration * 1000) + '|' + words.length + '|' + lineText;
+  return {
+    source: source,
+    start: Math.round(start * 1000) / 1000,
+    duration: Math.max(0.75, Math.min(18, Math.round(duration * 1000) / 1000)),
+    key: key,
+    words: words
+  };
+}
 
 function currentDesktopLyricSnapshot() {
   var t = audio && isFinite(audio.currentTime) ? Number(audio.currentTime) : 0;
   var lines = Array.isArray(lyricsLines) ? lyricsLines : [];
-  if (playing && audio && lines.length) {
+  if (audio && lines.length) {
     var idx = -1;
     for (var i = 0; i < lines.length; i++) {
       if (lines[i].t <= t + 0.05) idx = i;
@@ -26931,7 +27004,8 @@ function currentDesktopLyricSnapshot() {
         text: curText,
         nextText: nextText,
         progress: getLyricLineProgress(curLine, nextRawLine, t),
-        progressSpan: span
+        progressSpan: span,
+        wordTiming: compactDesktopWordTiming(curLine, curText)
       };
     }
     var introText = normalizeDesktopLyricText(currentLyricFallbackText());
@@ -26941,7 +27015,8 @@ function currentDesktopLyricSnapshot() {
       return {
         text: introText,
         progress: getLyricLineProgress({ t:0, text:introText, duration:Math.max(0.8, introEnd), charCount:Math.max(1, introText.length), fallback:true }, null, t),
-        progressSpan: Math.max(0.8, introEnd)
+        progressSpan: Math.max(0.8, introEnd),
+        wordTiming: null
       };
     }
   }
@@ -26949,10 +27024,11 @@ function currentDesktopLyricSnapshot() {
     return {
       text: normalizeDesktopLyricText(stageLyrics.currentText),
       progress: stageLyrics.current && stageLyrics.current.userData ? clampRange(Number(stageLyrics.current.userData.lastLyricProgress) || 0, 0, 1) : 0,
-      progressSpan: 4.8
+      progressSpan: 4.8,
+      wordTiming: null
     };
   }
-  return { text: normalizeDesktopLyricText(currentDesktopSongMeta().title || 'Mineradio'), progress: 0, progressSpan: 4.8 };
+  return { text: normalizeDesktopLyricText(currentDesktopSongMeta().title || 'Mineradio'), progress: 0, progressSpan: 4.8, wordTiming: null };
 }
 function desktopOverlayColorValue(value, fallback) {
   var raw = String(value || '').trim();
@@ -27037,6 +27113,7 @@ function desktopLyricsPayload(forceBeatMap) {
     alignment: fx.desktopLyricsAlignment || 'center',
     progress: lyric.progress,
     progressSpan: lyric.progressSpan,
+    wordTiming: lyric.wordTiming || null,
     title: meta.title,
     artist: meta.artist,
     playing: !!playing,
@@ -27085,7 +27162,8 @@ function pushDesktopLyricsState(force) {
   var payload = desktopLyricsPayload(!!force);
   var colors = payload.colors || {};
   var motion = payload.motion || {};
-  var key = payload.enabled + '|' + payload.text + '|' + Math.round(payload.progress * 1000) + '|' + Math.round((payload.progressSpan || 0) * 100) + '|' + payload.playing + '|' + payload.lineMode + '|' + payload.alignment + '|' + payload.size + '|' + payload.opacity + '|' + payload.y + '|' + payload.clickThrough + '|' + payload.cinema + '|' + payload.highlightFollow + '|' + payload.frameRate + '|' + payload.fontFamily + '|' + payload.fontWeight + '|' + payload.letterSpacing + '|' + payload.lineHeight + '|' + payload.lyricScale + '|' + payload.feather + '|' + payload.beatMapKey + '|' + colors.primary + '|' + colors.secondary + '|' + colors.highlight + '|' + colors.glow + '|' + motion.lyricGlow + '|' + motion.lyricGlowBeat + '|' + Math.round((motion.lyricGlowStrength || 0) * 100) + '|' + Math.round((motion.highBloom || 0) * 100) + '|' + Math.round((motion.beatGlow || 0) * 100) + '|' + Math.round((motion.beatPulse || 0) * 100) + '|' + Math.round((motion.bass || 0) * 100);
+  var wordTimingKey = payload.wordTiming && payload.wordTiming.key || 'none';
+  var key = payload.enabled + '|' + payload.text + '|' + Math.round(payload.progress * 1000) + '|' + Math.round((payload.progressSpan || 0) * 100) + '|' + wordTimingKey + '|' + payload.playing + '|' + payload.lineMode + '|' + payload.alignment + '|' + payload.size + '|' + payload.opacity + '|' + payload.y + '|' + payload.clickThrough + '|' + payload.cinema + '|' + payload.highlightFollow + '|' + payload.frameRate + '|' + payload.fontFamily + '|' + payload.fontWeight + '|' + payload.letterSpacing + '|' + payload.lineHeight + '|' + payload.lyricScale + '|' + payload.feather + '|' + payload.beatMapKey + '|' + colors.primary + '|' + colors.secondary + '|' + colors.highlight + '|' + colors.glow + '|' + motion.lyricGlow + '|' + motion.lyricGlowBeat + '|' + Math.round((motion.lyricGlowStrength || 0) * 100) + '|' + Math.round((motion.highBloom || 0) * 100) + '|' + Math.round((motion.beatGlow || 0) * 100) + '|' + Math.round((motion.beatPulse || 0) * 100) + '|' + Math.round((motion.bass || 0) * 100);
   if (!force && key === desktopOverlayPushState.lastLyricsKey && now - desktopOverlayPushState.lyricsAt < 900) return;
   desktopOverlayPushState.lyricsAt = now;
   desktopOverlayPushState.lastLyricsKey = key;
