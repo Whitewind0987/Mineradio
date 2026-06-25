@@ -437,7 +437,11 @@ feature/windows-startup
 
 ------
 
-## Stage 3.1：播放状态恢复
+## Stage 3.1：播放状态恢复 ✅ 已完成
+
+**实际分支**：`feature/session-restore`
+
+**已实现**：localStorage 版本化快照（`mineradio-playback-session-v1`，schemaVersion 1）。队列、索引、播放位置（秒）、播放模式在重启后恢复。保持暂停。手动 Play 从保存位置继续。支持网易云、QQ 和播客来源。本地/电台/未知曲目已排除。重复曲目正确映射出现。恢复的封面/背景/Emily 粒子已初始化。无自动流媒体解析、无自动播放、无远程歌词——满足所有路线图数据要求。无 IPC。音量独立于 `apex-player-volume` 恢复。
 
 ### 保存内容
 
