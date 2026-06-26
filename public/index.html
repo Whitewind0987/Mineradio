@@ -3744,12 +3744,6 @@ function installRenderPowerHooks() {
     updateRenderPowerClasses();
     applyRendererPowerMode();
     if (!isDeepBackgroundMode()) recoverVisualsAfterBackground('focus');
-    if (!startupLaunchBusy && startupLaunchSupported) {
-      var panel = document.getElementById('fx-panel');
-      if (panel && (panel.classList.contains('show') || panel.classList.contains('peek'))) {
-        refreshStartupLaunchState();
-      }
-    }
   });
   window.addEventListener('blur', function(){
     desktopRuntimeState.focused = false;
@@ -23209,7 +23203,7 @@ function toggleFxPanel(force) {
   }
   el.classList.remove('show', 'closing');
   setPeek(el, true, 'fx');
-  if (!currentlyOpen) refreshStartupLaunchState();
+  refreshStartupLaunchState();
 }
 function resetFx() {
   var savedCam = fx.cam;
