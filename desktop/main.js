@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, screen, session, globalShortcut, dia
 const net = require('net');
 const path = require('path');
 const fs = require('fs');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 
 // ============================================================================
 // Fork private development — temporary user-data isolation
@@ -314,6 +314,16 @@ function isStartupLaunchSupported() {
   return process.platform === 'win32' && app.isPackaged === true;
 }
 
+// The real HKCU Run value is the authoritative source for whether the login
+// item is registered. `settings.openAtLogin` is NOT reliable on some Windows
+// machines: confirmed runtime state had the Run value present and pointing at
+// the current executable, Electron finding the matching launch item, and
+// `executableWillLaunchAtLogin === true`, yet `settings.openAtLogin === false`.
+// Using openAtLogin as the sole authority therefore produced a false
+// STARTUP_STATE_MISMATCH. openAtLogin is kept only as a conservative fallback
+// when the direct Run query is unavailable. `launchItems` is inspected ONLY to
+// detect an explicitly disabled matching startup item (real StartupApproved
+// "disabled" set via Task Manager / Startup Apps).
 function getStartupLaunchState() {
   if (!isStartupLaunchSupported()) {
     return {
@@ -328,27 +338,148 @@ function getStartupLaunchState() {
       path: process.execPath,
       args: [],
     });
-    var items = Array.isArray(settings.launchItems) ? settings.launchItems : [];
-    var execPath = process.execPath;
-    var matched = null;
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      if (item.name !== STARTUP_LOGIN_ITEM_NAME) continue;
-      if (!Array.isArray(item.args) || item.args.length !== 0) continue;
-      var itemPath = String(item.path || '');
-      if (itemPath.toLowerCase() !== execPath.toLowerCase()) continue;
-      matched = item;
-      break;
+    var matched = findStartupLaunchItem(settings.launchItems);
+    var runState = readStartupLaunchRunState();
+    var startupApprovedState = readStartupApprovedState();
+    var registered;
+    if (runState.status === 'present') {
+      registered = runState.matchesCurrentExecutable === true;
+    } else if (runState.status === 'missing') {
+      registered = false;
+    } else {
+      // Run query unavailable: fall back conservatively to Electron evidence.
+      registered = !!matched || settings.openAtLogin === true;
     }
+    // Explicit-disable is derived ONLY from the real StartupApproved value,
+    // independent of whether Electron's launchItems surfaced a matching item.
+    var explicitlyDisabled = registered && startupApprovedState.status === 'disabled';
+    var enabled = registered && !explicitlyDisabled;
     return {
       ok: true,
       supported: true,
-      enabled: matched ? !!matched.enabled : false,
+      enabled: enabled,
+      registered: registered,
+      explicitlyDisabled: explicitlyDisabled,
+      startupApprovedStatus: startupApprovedState.status,
+      startupApprovedStateByte: startupApprovedState.firstByte,
+      willLaunch: enabled,
     };
   } catch (e) {
     console.warn('[StartupLaunch] read failed:', e && e.message);
     return { ok: false, supported: true, enabled: false, error: 'STARTUP_STATE_READ_FAILED' };
   }
+}
+
+// Find the launch item that matches our login-item name with empty args.
+// Returns the RAW Electron launchItems entry. It is used only as a fallback
+// signal for registration and for diagnostics. The explicit-disable state is
+// derived independently from the real StartupApproved registry value, NOT from
+// this item's enabled field, because Electron's launchItems may omit or
+// misreport a disabled item.
+function findStartupLaunchItem(launchItems) {
+  var items = Array.isArray(launchItems) ? launchItems : [];
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (!item || item.name !== STARTUP_LOGIN_ITEM_NAME) continue;
+    if (Array.isArray(item.args) && item.args.length !== 0) continue;
+    return item;
+  }
+  return null;
+}
+
+// Narrow read of the single StartupApproved\Run\<login item> REG_BINARY value.
+// Returns {status, firstByte}: 'enabled' (first byte 0x02/0x06/0x08),
+// 'disabled' (0x01/0x03/0x09), 'missing' (reg exit 1 = value absent), or
+// 'unknown' (launch/parse failure or unrecognized state byte).
+// A missing or unknown value is NOT explicitly disabled (Windows default is
+// enabled); only 'disabled' is. Never throws, never inspects unrelated values,
+// never modifies the registry. Missing-vs-error is distinguished by reg exit
+// status (1 = absent), not by localized stderr text.
+function readStartupApprovedState() {
+  if (process.platform !== 'win32') {
+    return { status: 'unknown', firstByte: null };
+  }
+  var systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  var regPath = systemRoot + '\\System32\\reg.exe';
+  var key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run';
+  var out;
+  try {
+    out = execFileSync(regPath, ['query', key, '/v', STARTUP_LOGIN_ITEM_NAME], {
+      windowsHide: true,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    if (e && e.status === 1) {
+      return { status: 'missing', firstByte: null };
+    }
+    return { status: 'unknown', firstByte: null };
+  }
+  var match = /REG_BINARY\s+([0-9A-Fa-f\s]+)/.exec(out || '');
+  if (!match) return { status: 'unknown', firstByte: null };
+  var hex = match[1].replace(/\s+/g, '');
+  if (hex.length < 2) return { status: 'unknown', firstByte: null };
+  var firstByte = parseInt(hex.slice(0, 2), 16);
+  if (firstByte === 0x02 || firstByte === 0x06 || firstByte === 0x08) return { status: 'enabled', firstByte: firstByte };
+  if (firstByte === 0x01 || firstByte === 0x03 || firstByte === 0x09) return { status: 'disabled', firstByte: firstByte };
+  return { status: 'unknown', firstByte: firstByte };
+}
+
+// Narrow read of the single HKCU\...\Run\<login item> value. Returns
+// structured state: status is 'present' when reg reports the value, 'missing'
+// for a normal absent-value result, or 'unknown' for launch/parse failures.
+// Never throws. Does not inspect unrelated Run values or modify the registry.
+function readStartupLaunchRunState() {
+  if (process.platform !== 'win32') {
+    return { status: 'unknown', command: null, matchesCurrentExecutable: false };
+  }
+  var systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  var regPath = systemRoot + '\\System32\\reg.exe';
+  var key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+  var out;
+  try {
+    out = execFileSync(regPath, ['query', key, '/v', STARTUP_LOGIN_ITEM_NAME], {
+      windowsHide: true,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    // reg exit 1 = value absent (the Run key itself is a standard user key
+    // that always exists). Distinguish by exit status, not localized text.
+    if (e && e.status === 1) {
+      return { status: 'missing', command: null, matchesCurrentExecutable: false };
+    }
+    return { status: 'unknown', command: null, matchesCurrentExecutable: false };
+  }
+  if (typeof out !== 'string' || out === '') {
+    return { status: 'unknown', command: null, matchesCurrentExecutable: false };
+  }
+  var match = /REG_SZ\s+(.*)/.exec(out);
+  if (!match) {
+    return { status: 'unknown', command: null, matchesCurrentExecutable: false };
+  }
+  var command = match[1].replace(/[\r\n]+$/, '').trim();
+  return {
+    status: 'present',
+    command: command,
+    matchesCurrentExecutable: runCommandMatchesCurrentExecutable(command),
+  };
+}
+
+// Compare a Run command value against process.execPath. Ignores surrounding
+// quotes, compares case-insensitively, and allows arguments after the
+// executable. Does not accept an unrelated executable merely because the value
+// name matched: the executable token must equal process.execPath.
+function runCommandMatchesCurrentExecutable(command) {
+  if (typeof command !== 'string' || command === '') return false;
+  var c = command.trim();
+  if (c.charAt(0) === '"') c = c.slice(1); // drop a leading quote
+  var exe = process.execPath;
+  if (c.length < exe.length) return false;
+  if (c.slice(0, exe.length).toLowerCase() !== exe.toLowerCase()) return false;
+  var next = c.charAt(exe.length);
+  // Executable must be followed by end, a closing quote, or whitespace (args).
+  return next === '' || next === '"' || next === ' ' || next === '\t';
 }
 
 function setStartupLaunchEnabled(enabled) {
@@ -368,14 +499,39 @@ function setStartupLaunchEnabled(enabled) {
     if (enabled) settings.enabled = true;
     app.setLoginItemSettings(settings);
   } catch (e) {
-    console.warn('[StartupLaunch] write failed:', e && e.message);
+    console.warn('[StartupLaunch] write failed:', e && e.message, 'enabled=', enabled);
     return { ok: false, supported: true, enabled: false, error: 'STARTUP_STATE_WRITE_FAILED' };
   }
   var queried = getStartupLaunchState();
-  if (queried.ok && queried.supported && queried.enabled !== enabled) {
-    return { ok: false, supported: true, enabled: queried.enabled, error: 'STARTUP_STATE_MISMATCH' };
+  // Preserve an unsuccessful or unsupported read result as-is instead of
+  // letting the direction-aware check below convert STARTUP_STATE_READ_FAILED
+  // into STARTUP_STATE_MISMATCH.
+  if (!queried.ok || !queried.supported) {
+    return queried;
+  }
+  // Direction-aware verification. `registered` is derived from the real HKCU
+  // Run value, so a missing/ambiguous StartupApproved state alone never causes
+  // a mismatch; only a genuine registration failure or an explicitly disabled
+  // matching item does. Disabling succeeds only when the real Run value is gone.
+  var success;
+  if (enabled) {
+    success = queried.registered === true && queried.explicitlyDisabled !== true;
+  } else {
+    success = queried.registered === false;
+  }
+  if (!success) {
+    logStartupLaunchMismatch(enabled, queried);
+    return { ok: false, supported: true, enabled: queried.enabled, error: 'STARTUP_STATE_MISMATCH', registered: queried.registered, explicitlyDisabled: queried.explicitlyDisabled };
   }
   return queried;
+}
+
+// Concise diagnostics on a real mismatch only.
+function logStartupLaunchMismatch(requested, queried) {
+  var startupApprovedStateByte = Number.isInteger(queried.startupApprovedStateByte)
+    ? '0x' + queried.startupApprovedStateByte.toString(16).padStart(2, '0')
+    : 'null';
+  console.warn('[StartupLaunch] mismatch: requested=', requested, 'registered=', queried.registered, 'explicitlyDisabled=', queried.explicitlyDisabled, 'enabled=', queried.enabled, 'startupApprovedStatus=', queried.startupApprovedStatus || 'unknown', 'stateByte=', startupApprovedStateByte);
 }
 
 let tray = null;

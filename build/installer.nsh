@@ -37,7 +37,12 @@
 !include nsDialogs.nsh
 !include WinMessages.nsh
 
-!define MINERADIO_INSTALL_FOLDER "Mineradio W"
+; Mineradio-W is the single canonical Windows installation folder name.
+; Fresh installs and verified legacy upgrades both resolve to Mineradio-W, so
+; path normalization is idempotent and never appends a second application
+; folder. MINERADIO_LEGACY_INSTALL_FOLDER is retained as an identical alias so
+; the existing marker/evidence safety checks remain untouched.
+!define MINERADIO_INSTALL_FOLDER "Mineradio-W"
 !define MINERADIO_LEGACY_INSTALL_FOLDER "Mineradio-W"
 !define MINERADIO_INSTALL_MARKER ".mineradio-w-install-root"
 !define MINERADIO_INSTALL_APP_ID "com.whitewind0987.mineradio.w"
@@ -1151,7 +1156,7 @@ Function MineradioWelcomeShow
   Pop $0
   SetCtlColors $0 "" "3257F7"
 
-  ${NSD_CreateLabel} 22u 96u 238u 24u "为这台电脑安装 Mineradio W。默认安装到 D:\Mineradio W，下一步可以自由选择其它位置。"
+  ${NSD_CreateLabel} 22u 96u 238u 24u "为这台电脑安装 Mineradio W。默认安装到 D:\Mineradio-W，下一步可以自由选择其它位置。"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioBodyFont 1
   SetCtlColors $0 "4B5263" "FFFFFF"
@@ -1216,7 +1221,7 @@ Function MineradioDirectoryShow
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
   ${NSD_OnClick} $0 MineradioDirectoryBrowse
 
-  ${NSD_CreateLabel} 22u 122u 238u 12u "默认推荐：D:\Mineradio W；选盘符会自动建文件夹。"
+  ${NSD_CreateLabel} 22u 122u 238u 12u "默认推荐：D:\Mineradio-W；选盘符会自动建文件夹。"
   Pop $0
   SendMessage $0 ${WM_SETFONT} $MineradioSmallFont 1
   SetCtlColors $0 "6B7280" "FFFFFF"
