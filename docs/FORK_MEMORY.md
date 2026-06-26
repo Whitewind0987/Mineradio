@@ -401,3 +401,102 @@ npm start
 **未改变/未验证**：Stage 4.1 静态双行行为仍是权威行为；未恢复垂直 two-line rolling、snapshot、clone、shell、FLIP 或纵向 viewport animation。Stage 4.1 已接受的主窗口移动时轻微初始/拖动闪烁限制未改变。Stage 4.6 多显示器测试因 White 当前只有一个显示器而跳过，不能标记为通过。Stage 4.2 逐字高亮是下一开发阶段；Stage 4.2 之后再进行独立的后台与桌面歌词功耗优化工作。
 
 **不应回退的边界**：不得为工具栏创建第二套状态或存储；不得让 overlay 直接写持久化；不得用模拟按钮点击代替语义播放路径；不得让工具栏控件触发窗口拖拽；不得让恢复默认重置位置、锁定、启用、颜色、透明度、播放或 BrowserWindow bounds；不得恢复垂直 rolling；不得引入新依赖、品牌、安装器或更新器变更。
+
+---
+
+### 2026-06-26：Mineradio W 安装器路径安全修复
+
+**分支**：`fix/installer-safety`
+
+**来源**：移植并适配 upstream `XxHuberrr/Mineradio` commit `68e7fa0a2061a560982e4e2354680c6b4b2a4b68` 的安装路径安全修复。不是整包同步。
+
+**版本**：`1.1.0-w1` → `1.1.1-w1`。只更新 `package.json`、`package-lock.json` 的项目版本；未更改依赖版本。
+
+**安装身份保持**：package name `mineradio-w`；product name `Mineradio W`；appId `com.whitewind0987.mineradio.w`；可执行文件 `Mineradio-W.exe`；快捷方式、卸载显示名和安装包 artifact 仍为 Mineradio W；GitHub 发布源仍为 `Whitewind0987/Mineradio`；自动更新仍禁用；`asar` 仍为 `false`；GPL license 与 `FORK-NOTICE.txt` 仍打包。
+
+**所有权 marker**：
+- 文件名：`.mineradio-w-install-root`
+- 内容至少包含：`appId=com.whitewind0987.mineradio.w`
+- 仅在安装目录通过校验后由 `customInstall` 写入。
+- 卸载时必须读取 marker 并验证 appId，不能只依赖文件存在。
+
+**安全安装路径规则**：
+- Fresh install 的实际安装目标始终规范化为专属 `Mineradio W` 子目录。
+- 选择盘符根或普通父目录时，自动落到 `Mineradio W` 子目录。
+- 已验证的 legacy `1.1.0-w1` 安装可保留真实旧根目录 `Mineradio-W`，不会被重命名，也不会追加 `Mineradio W` 子目录。
+- 非空目录只有在以下情况下接受：有效 Mineradio W marker；或注册表身份指向同一路径且存在 Mineradio W 旧安装证据；或目录为空。
+- 最终校验在通用“非空非专属目录”拒绝之前，会先检查 verified markerless legacy 例外：要求 `$MineradioLegacyInstallAdopted == 1`、当前路径严格等于 `$MineradioLegacyInstallDir`、最终组件为 `Mineradio-W`、`Mineradio-W.exe` 与 Mineradio W 应用资源存在。
+- 不因目录名叫 `Mineradio W` 或 `Mineradio-W` 就直接收养。
+- 不删除未知文件来让目录变得可接受。
+- 保留现有自定义安装目录页面视觉和默认 D 盘优先行为。
+
+**Legacy `1.1.0-w1` 升级行为**：
+- 第一版实现曾成功构建，但 White 在虚拟机中验证 legacy 升级失败：`1.1.1-w1` 安装器仍要求先移除已安装的 `1.1.0-w1`。
+- 失败原因是 electron-builder 生成的 `installSection.nsh` 仍会调用 `uninstallOldVersion` / `handleUninstallResult`；第一版只删除旧卸载器文件，没有提前移除 verified legacy 的卸载注册项，因此生成宏仍能从 `UninstallString` 进入旧版本移除流程。
+- 第二版实现也曾成功构建，但 White 的 VM 复测再次失败：安装器不再要求手动卸载旧版，却把新版本装进了旧专属目录下的嵌套 `Mineradio W\Mineradio W` 子目录。
+- 嵌套目录原因是 `MineradioNormalizeInstallDir` / `un.MineradioNormalizeInstallDir` 判断 `\Mineradio W` 后缀时使用了错误长度 `12`；实际后缀长度为 `11`，导致已经专属的 legacy 目录被当作父目录再次追加 `\Mineradio W`。
+- 第三次 fresh-install VM 测试失败：White 选择父目录 `C:\MRW-Test\Fresh`，期望最终目录 `C:\MRW-Test\Fresh\Mineradio W`，但安装后检查结果为 `False / False / True`：`C:\MRW-Test\Fresh\Mineradio W\Mineradio-W.exe` 不存在，`C:\MRW-Test\Fresh\Mineradio W\.mineradio-w-install-root` 不存在，`C:\MRW-Test\Fresh\Mineradio W\Mineradio W\Mineradio-W.exe` 存在。
+- fresh install 失败证明固定长度后缀判断整体不可靠，不只是 `12` 与 `11` 的差异。原因是浏览按钮先把 `C:\MRW-Test\Fresh` 规范化为 `...\Mineradio W` 并写回输入框，目录页 leave 随后再次规范化输入框文本；基础 normalize 非幂等时会追加第二层。
+- 第四次 legacy-upgrade VM 测试失败：真实发布的 `1.1.0-w1` 默认安装目录是 `C:\Users\YMXD\AppData\Local\Programs\Mineradio-W`，不是 `...\Mineradio W`。White 在该根目录放置 `LEGACY-SENTINEL.txt` 后运行 `1.1.1-w1`，检查结果为 `False / False / False / True`：旧根下 `Mineradio-W.exe`、`LEGACY-SENTINEL.txt`、`.mineradio-w-install-root` 均不存在，而 `Mineradio-W\Mineradio W\Mineradio-W.exe` 存在。
+- 第四次失败原因是 legacy 证据和收养路径仍套用了 fresh-install normalize：`Mineradio-W` 被解释为父目录并追加 `Mineradio W`，所以真实旧根没有被收养，旧卸载注册项也没有被正确事务式中和。
+- `LEGACY-SENTINEL.txt` 的删除来源不是自定义 wildcard/root 清理，而是 electron-builder 生成的 `uninstallOldVersion` 从仍可见的 legacy `UninstallString` 执行旧卸载器；旧卸载器在错误迁移路径下清理了外层 legacy 根。自定义脚本仍禁止 `Delete "$INSTDIR\*"`、`Delete "$INSTDIR\*.*"` 和 `RMDir /r "$INSTDIR"`。
+- 最终修正：
+  - `customInit` 阶段先解析并收养 Mineradio W 自己的 HKCU/HKLM `Software\80c6a246-0542-5156-a184-0d2440cdcc6d` 与 `Software\Microsoft\Windows\CurrentVersion\Uninstall\80c6a246-0542-5156-a184-0d2440cdcc6d` 注册表路径。
+  - 支持从 uninstall key 的 `InstallLocation` 或 `UninstallString` 派生实际安装目录；markerless legacy 收养要求目录最终组件为真实旧名 `Mineradio-W`，且存在 `Mineradio-W.exe` 与 `resources\app\package.json` / `resources\app\server.js` / `resources\app.asar` 等 Mineradio W legacy 证据。
+  - 使用显式 `MineradioLegacyInstallDir` 和 `MineradioLegacyInstallAdopted` 状态记录 verified legacy 收养；当当前路径等于已收养的 `Mineradio-W` 精确目录时，`MineradioNormalizeInstallDirPreservingAdopted` 会保留该路径，不再把它当父目录。
+  - Fresh 基础规范化保持幂等：trim 尾部反斜杠（保留盘符根）→ drive root 特判 → `${GetFileName}` 获取最终目录组件 → 与 `Mineradio W` 比较 → 仅最终组件不是 `Mineradio W` 时才追加。真实 legacy 目录 `Mineradio-W` 由 `$MineradioLegacyInstallDir` 绕过 fresh normalize。
+  - 已移除用于判断 `Mineradio W` 目录名的固定长度后缀切片；`MineradioNormalizeInstallDir` 使用最终路径组件比较，保证 `C:\MRW-Test\Fresh` → `C:\MRW-Test\Fresh\Mineradio W` 且再次规范化仍为同一目录。
+  - NSIS 临时寄存器污染曾导致 legacy 路径在 helper 调用后被覆盖为 `0` 或 `1`；最终把重要路径值保存在辅助函数外的 `$R3`，避免被 `$0`–`$5` 覆盖。
+  - 最终校验新增 verified markerless legacy 例外：在通用“非空非专属目录”拒绝之前，先检查 `$MineradioLegacyInstallAdopted == 1`、当前路径严格等于 `$MineradioLegacyInstallDir`、最终组件为 `Mineradio-W`、且 `MineradioLegacyInstallHasEvidence` 返回 `1`。只有完全匹配的 verified legacy 目标才提前放行；任意非空 `Mineradio-W` 文件夹仍然被阻止。
+  - 取消安全已改为事务式：初始 UI 阶段只检测和记录，不删除旧卸载器，也不删除/注销 uninstall key。进入 instfiles 前才临时删除 legacy `UninstallString` / `QuietUninstallString` 值以阻止生成的 `uninstallOldVersion` 执行旧卸载器；`MUI_CUSTOMFUNCTION_ABORT` 和 `.onInstFailed` 会在取消或失败时恢复这些值。安装提交后由新注册表覆盖。
+  - 成功提交时只删除 legacy 空格名残留卸载器 `Uninstall Mineradio W.exe`；不会在 `customInstall` 删除 `Uninstall Mineradio-W.exe`，避免删掉新版本卸载器。
+  - 对不安全或不可收养的旧路径，不触碰官方 Mineradio 或其它应用。
+  - 安装继续写入已验证的专属目录并注册新的安全卸载器。
+
+**安全卸载边界**：
+- 卸载前验证路径最终组件是 `Mineradio W` 或迁移后的 `Mineradio-W`，并验证 marker appId。
+- 验证失败时退出卸载并提示用户，避免误删。
+- 仅删除已知 Mineradio W 顶层文件、marker、卸载器、Electron 文件，以及明确应用拥有的 `resources\app`、`locales`、`swiftshader` 目录。
+- 安装根 `$INSTDIR` 只使用非递归 `RMDir "$INSTDIR"`；如果目录内有未知文件会保留根目录。
+- 不允许 `RMDir /r "$INSTDIR"` 或递归删除用户选择的父目录。
+
+**文件涉及**：`build/installer.nsh`、`package.json`、`package-lock.json`、`docs/FORK_MEMORY.md`、`docs/HANDOFF_CURRENT.md`。
+
+**构建与静态验证**：
+- `git diff --check` 通过，仅提示 `build/installer.nsh` 的 LF/CRLF 工作区换行警告。
+- `build/installer.nsh` 通过 UTF-8 fatal decode 校验。
+- 搜索确认无 `com.mineradio.desktop`、无 `.mineradio-install-root`、无上游裸 `\Mineradio` 强制安装目录、无 `RMDir /r "$INSTDIR"`、无执行 legacy uninstaller。
+- 搜索确认递归删除仅限 `$INSTDIR\resources\app`、`$INSTDIR\locales`、`$INSTDIR\swiftshader`。
+- `npm run build:win` 成功生成完整 NSIS 安装包：`dist\Mineradio-W-1.1.1-w1-Setup.exe`。
+- 最终安装包 SHA256：`A99901BC27BBF5E3F80F4DC859560F071D4AC9498E3813D38FE92CC1D718D3E6`。
+- 生成脚本/模板顺序确认：`.onInit` 在 `initMultiUser` 后插入 `customInit`；`customPageAfterChangeDir` 位于 `MUI_PAGE_INSTFILES` 前；install section 在文件释放前调用 `uninstallOldVersion` / `handleUninstallResult`，因此临时删除 `UninstallString` 必须发生在自定义目录页 leave 或 silent validate 后、instfiles 前。
+- 搜索确认不再存在用于判断 `Mineradio W` 目录名的固定 `11` / `12` 后缀切片。
+- 搜索确认卸载器校验接受 marker-owned `Mineradio W` 与 `Mineradio-W` 两种最终路径组件。
+
+**White 手动 VM 最终验证结果**：
+
+已在 Windows VM 中完成以下验证：
+
+1. Fresh 安装到所选父目录时，只创建一层 `Mineradio W` 子目录。
+2. 未出现嵌套 `Mineradio W\Mineradio W` 目录。
+3. 所有权 marker `.mineradio-w-install-root` 写入正确。
+4. 无关非空目录仍被阻止。
+5. marker 损坏或被篡改时卸载被阻止。
+6. 真实 legacy `1.1.0-w1` 目录为 `C:\Users\YMXD\AppData\Local\Programs\Mineradio-W`。
+7. 新安装器在目录页显示并保留该精确 legacy 目录。
+8. Legacy 原地升级成功完成。
+9. 升级后检查结果为 `True / True / True / False`：
+   - 新可执行文件存在；
+   - `LEGACY-SENTINEL.txt` 保留；
+   - ownership marker 存在；
+   - 不存在嵌套的 `Mineradio W\Mineradio-W.exe`。
+10. 升级过程中未启动旧卸载器。
+11. 升级后只保留一条卸载注册表项。
+12. 卸载注册表项报告版本为 `1.1.1-w1`。
+13. 在安装阶段前取消新安装器，旧 `1.1.0-w1` 的卸载注册表项与文件均保留。
+14. 升级后执行安全卸载，已知 Mineradio W 文件被删除。
+15. 卸载后未知根文件和未知子目录保留。
+16. 存在未知文件时安装根目录保留。
+17. 卸载注册表项最终被成功移除。
+
+**注意**：以上 17 项为本次 White 手动验证的范围。未列出的测试（例如与官方 Mineradio 并存、物理耳机/锁屏等）不在本次 installer-safety 验证结论内。
